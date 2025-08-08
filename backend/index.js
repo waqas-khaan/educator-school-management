@@ -1,4 +1,9 @@
-require("dotenv").config();
+const path = require("path");
+const dotenv = require("dotenv");
+// Load .env from backend directory (default)
+dotenv.config();
+// Also attempt to load project root .env if running from a monorepo root
+dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -64,7 +69,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 8081;
 
-app.listen(PORT, "localhost", () => {
+app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-  console.log(`Server accessible at: http://localhost:${PORT}`);
+  console.log(`Server accessible at: 0.0.0.0:${PORT}`);
 });

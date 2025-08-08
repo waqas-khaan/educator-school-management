@@ -3,15 +3,25 @@ const mysql = require("mysql2");
 // Database configuration with defaults for development
 const dbConfig = {
   host: process.env.DB_HOST || "localhost",
+  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
   user: process.env.DB_USER || "root",
   password: process.env.DB_PASSWORD || "rootuser",
   database: process.env.DB_NAME || "TheEducatorSchool",
+  ssl:
+    process.env.DB_SSL === "true"
+      ? {
+          // Render-managed databases typically require SSL without verification
+          rejectUnauthorized: false,
+        }
+      : undefined,
 };
 
 console.log("🔧 Database Config:", {
   host: dbConfig.host,
   user: dbConfig.user,
   database: dbConfig.database,
+  port: dbConfig.port,
+  ssl: !!dbConfig.ssl,
   password: dbConfig.password ? "***" : "NO PASSWORD",
 });
 
