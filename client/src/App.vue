@@ -88,7 +88,6 @@ export default {
     this.$router.beforeEach((to, from, next) => {
       // Show loading when route changes (except for login and initial load)
       if (to.path !== from.path && to.path !== "/login" && from.path !== "/") {
-        console.log("Route loading started:", from.path, "->", to.path);
         this.isRouteLoading = true;
       }
       next();
@@ -97,7 +96,6 @@ export default {
     this.$router.afterEach((to, from) => {
       // Hide loading after route change is complete
       if (to.path !== from.path && to.path !== "/login") {
-        console.log("Route loading finished:", from.path, "->", to.path);
         setTimeout(() => {
           this.isRouteLoading = false;
         }, 1000);

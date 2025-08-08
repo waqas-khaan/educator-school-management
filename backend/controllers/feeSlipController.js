@@ -1,15 +1,16 @@
 const db = require("../config/db");
 const fs = require("fs");
 const path = require("path");
+const JsBarcode = require("jsbarcode");
 
-// Generate unique slip number (unique per student, not per month)
-const generateUniqueSlipNumber = (studentId) => {
+// Generate unique slip number (consistent for same student)
+const generateUniqueSlipNumber = (studentId, admissionNumber) => {
   const paddedStudentId = studentId.toString().padStart(4, "0");
-  const timestamp = Date.now().toString().slice(-6); // Last 6 digits of timestamp
-  const randomSuffix = Math.floor(Math.random() * 1000)
-    .toString()
-    .padStart(3, "0");
-  return `FS${paddedStudentId}${timestamp}${randomSuffix}`;
+  const cleanAdmissionNumber = (admissionNumber || "").replace(
+    /[^A-Z0-9]/g,
+    ""
+  );
+  return `FS${paddedStudentId}${cleanAdmissionNumber}`;
 };
 
 // Generate monthly slip number (for backward compatibility)
@@ -19,16 +20,38 @@ const generateSlipNumber = (studentId, month, year) => {
   return `FS${paddedStudentId}${paddedMonth}${year}`;
 };
 
-// Generate unique student barcode
+// Generate unique student barcode (consistent for same student)
 const generateStudentBarcode = (studentId, admissionNumber) => {
   const paddedStudentId = studentId.toString().padStart(4, "0");
-  // Create unique barcode: ST (Student) + StudentID + Admission Number (cleaned) + timestamp
+  // Create consistent barcode: FS (Fee Slip) + StudentID + Admission Number (cleaned)
   const cleanAdmissionNumber = admissionNumber.replace(/[^A-Z0-9]/g, "");
-  const timestamp = Date.now().toString().slice(-4); // Last 4 digits of timestamp
-  const randomSuffix = Math.floor(Math.random() * 100)
-    .toString()
-    .padStart(2, "0");
-  return `ST${paddedStudentId}${cleanAdmissionNumber}${timestamp}${randomSuffix}`;
+  return `FS${paddedStudentId}${cleanAdmissionNumber}`;
+};
+
+// Generate barcode image for portable scanner compatibility
+const generateBarcodeImage = (barcodeData, format = "CODE128") => {
+  try {
+    // Create canvas element
+    const { createCanvas } = require("canvas");
+    const canvas = createCanvas(300, 100);
+    const ctx = canvas.getContext("2d");
+
+    // Generate barcode
+    JsBarcode(canvas, barcodeData, {
+      format: format,
+      width: 2,
+      height: 50,
+      displayValue: true,
+      fontSize: 14,
+      margin: 10,
+    });
+
+    // Convert to buffer
+    return canvas.toBuffer("image/png");
+  } catch (error) {
+    console.error("Error generating barcode image:", error);
+    return null;
+  }
 };
 
 // Create simple text-based barcode representation
@@ -73,64 +96,17 @@ exports.generateFeeSlip = async (req, res) => {
     console.log("🔍 Checked existing fee slips:", results.length, "found");
 
     if (results.length > 0) {
-      // Fee slip already exists, but we need to check current payment status
+      // Fee slip already exists - return existing fee slip data
       const existingFeeSlip = results[0];
+      console.log("⏭️ Fee slip already exists for this student and month");
 
-      // Get current payment status for this month
-      const currentPaymentQuery = `
-        SELECT COALESCE(SUM(amount), 0) as paid_amount
-        FROM fees 
-        WHERE student_id = ? 
-        AND month = ? 
-        AND year = ?
-        AND fee_type IN ('Monthly Fee', 'Admission Fee', 'Arrears', 'Fine')
-      `;
-
-      db.query(
-        currentPaymentQuery,
-        [student_id, month, year],
-        (err, paymentResult) => {
-          if (err) {
-            console.error("Error checking current payment status:", err);
-            return res.status(500).json({ error: "Database error" });
-          }
-
-          const paidAmount = parseFloat(paymentResult[0].paid_amount) || 0;
-          const originalTotal = parseFloat(existingFeeSlip.total_amount) || 0;
-          const isFullyPaid = paidAmount >= originalTotal;
-
-          // Use comprehensive fee calculation instead of simple comparison
-          // Get the existing fee slip data and use comprehensive calculation
-          const getExistingFeeSlipQuery = `
-          SELECT * FROM fee_slips WHERE id = ?
-        `;
-
-          db.query(
-            getExistingFeeSlipQuery,
-            [existingFeeSlip.id],
-            (err, feeSlipResult) => {
-              if (err) {
-                console.error("Error fetching existing fee slip:", err);
-                return res.status(500).json({ error: "Database error" });
-              }
-
-              if (feeSlipResult.length === 0) {
-                return res.status(404).json({ error: "Fee slip not found" });
-              }
-
-              const existingFeeSlipData = feeSlipResult[0];
-
-              // Use comprehensive fee calculation
-              this.getComprehensiveFeeData(
-                student_id,
-                existingFeeSlipData,
-                res
-              );
-            }
-          );
-        }
-      );
-      return; // Add return statement to prevent further execution
+      return res.status(200).json({
+        message: "Fee slip already exists",
+        slip_id: existingFeeSlip.id,
+        slip_number: existingFeeSlip.slip_id,
+        total_amount: existingFeeSlip.total_amount,
+        status: "Already Exists",
+      });
     }
 
     // Get student information
@@ -160,37 +136,68 @@ exports.generateFeeSlip = async (req, res) => {
 
       const student = students[0];
       const monthlyFee = parseFloat(student.monthly_fee) || 0;
+      const transportFee = parseFloat(student.transport_fee) || 0;
 
-      // Calculate arrears (unpaid fees from previous months, accounting for payments made)
+      // Calculate arrears (only previous month's remaining balance)
+      const previousMonth = month === 1 ? 12 : month - 1;
+      const previousYear = month === 1 ? year - 1 : year;
+
+      console.log(
+        `🔍 Calculating arrears for month ${month}/${year}, looking at previous month ${previousMonth}/${previousYear}`
+      );
+
       const arrearsQuery = `
-        SELECT COALESCE(SUM(
-          fs.total_amount - COALESCE(
+        SELECT 
+          fs.total_amount,
+          fs.monthly_fee,
+          fs.transport_fee,
+          fs.admission_fee,
+          fs.arrears_amount,
+          fs.fine_amount,
+          COALESCE(
             (SELECT SUM(f2.amount) 
              FROM fees f2 
              WHERE f2.student_id = fs.student_id 
              AND f2.month = fs.month 
              AND f2.year = fs.year
-             AND f2.fee_type IN ('Monthly Fee', 'Arrears', 'Fine', 'Annual Fee')
-            ), 0)
-        ), 0) as arrears
+             AND f2.fee_type IN ('Monthly Fee', 'Transport Fee', 'Admission Fee', 'Arrears', 'Fine', 'Annual Fee')
+            ), 0) as total_paid
         FROM fee_slips fs
         WHERE fs.student_id = ? 
-          AND (fs.month < ? OR (fs.month = ? AND fs.year < ?))
-          AND fs.status = 'Pending'
+          AND fs.month = ? 
+          AND fs.year = ?
+        ORDER BY fs.id DESC LIMIT 1
       `;
+
+      console.log(`🔍 Arrears query: ${arrearsQuery}`);
+      console.log(
+        `🔍 Query parameters: [${student_id}, ${previousMonth}, ${previousYear}]`
+      );
 
       db.query(
         arrearsQuery,
-        [student_id, month, month, year],
+        [student_id, previousMonth, previousYear],
         (err, arrearsResult) => {
           if (err) {
             console.error("Error calculating arrears:", err);
             return res.status(500).json({ error: "Database error" });
           }
 
-          const arrears = parseFloat(arrearsResult[0].arrears) || 0;
+          let arrears = 0;
+          if (arrearsResult.length > 0) {
+            const feeSlip = arrearsResult[0];
+            const totalAmount = parseFloat(feeSlip.total_amount) || 0;
+            const totalPaid = parseFloat(feeSlip.total_paid) || 0;
+            arrears = Math.max(0, totalAmount - totalPaid);
 
-          // Calculate fine (unpaid fines from previous months)
+            console.log(`🔍 Arrears calculation for student ${student_id}:`);
+            console.log(`   Previous month: ${previousMonth}/${previousYear}`);
+            console.log(`   Total amount: ${totalAmount}`);
+            console.log(`   Total paid: ${totalPaid}`);
+            console.log(`   Arrears: ${arrears}`);
+          }
+
+          // Calculate fine (only previous month's unpaid fines)
           const fineQuery = `
             SELECT COALESCE(SUM(fs.fine_amount - COALESCE(
               (SELECT SUM(f2.amount) 
@@ -203,13 +210,14 @@ exports.generateFeeSlip = async (req, res) => {
             ), 0) as total_fine
             FROM fee_slips fs
             WHERE fs.student_id = ? 
-              AND (fs.month < ? OR (fs.month = ? AND fs.year < ?))
+              AND fs.month = ? 
+              AND fs.year = ?
               AND fs.fine_amount > 0
           `;
 
           db.query(
             fineQuery,
-            [student_id, month, month, year],
+            [student_id, previousMonth, previousYear],
             (err, fineResult) => {
               if (err) {
                 console.error("Error calculating fine:", err);
@@ -250,13 +258,16 @@ exports.generateFeeSlip = async (req, res) => {
                     const insertQuery = `
                 INSERT INTO fee_slips (
                   slip_id, student_id, admission_number, student_name, class_name,
-                  month, year, monthly_fee, admission_fee, arrears_amount, fine_amount, 
+                  month, year, monthly_fee, admission_fee, transport_fee, arrears_amount, fine_amount, 
                   discount_amount, total_amount, due_date, barcode_data
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               `;
 
                     const values = [
-                      generateUniqueSlipNumber(student_id),
+                      generateUniqueSlipNumber(
+                        student_id,
+                        student.admission_number || ""
+                      ),
                       student_id,
                       student.admission_number || "",
                       student.name,
@@ -265,6 +276,7 @@ exports.generateFeeSlip = async (req, res) => {
                       year,
                       0, // monthly_fee = 0 (already paid)
                       0, // admission_fee = 0 (already paid)
+                      0, // transport_fee = 0 (already paid)
                       0, // arrears_amount = 0 (already paid)
                       0, // fine_amount = 0 (already paid)
                       discount,
@@ -305,20 +317,28 @@ exports.generateFeeSlip = async (req, res) => {
                   }
 
                   const totalAmount =
-                    admissionFee + monthlyFee + arrears + fine - discount;
+                    admissionFee +
+                    monthlyFee +
+                    transportFee +
+                    arrears +
+                    fine -
+                    discount;
 
                   // Set due date to 10th of next month (month is 0-indexed in Date constructor)
                   const dueDate = new Date(year, month - 1, 10);
 
-                  const slipNumber = generateUniqueSlipNumber(student_id);
+                  const slipNumber = generateUniqueSlipNumber(
+                    student_id,
+                    student.admission_number || ""
+                  );
 
                   // Insert fee slip
                   const insertQuery = `
               INSERT INTO fee_slips (
                 slip_id, student_id, admission_number, student_name, class_name,
-                month, year, monthly_fee, admission_fee, arrears_amount, fine_amount, 
+                month, year, monthly_fee, admission_fee, transport_fee, arrears_amount, fine_amount, 
                 discount_amount, total_amount, due_date, barcode_data
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
                   const values = [
@@ -331,6 +351,7 @@ exports.generateFeeSlip = async (req, res) => {
                     year,
                     monthlyFee,
                     admissionFee,
+                    transportFee,
                     arrears,
                     fine,
                     discount,
@@ -398,7 +419,10 @@ exports.generateAllFeeSlips = async (req, res) => {
         const student = students[i];
 
         try {
-          const slipNumber = generateUniqueSlipNumber(student.id);
+          const slipNumber = generateUniqueSlipNumber(
+            student.id,
+            student.admission_number || ""
+          );
 
           // Check if fee slip already exists
           const checkQuery = `
@@ -421,18 +445,20 @@ exports.generateAllFeeSlips = async (req, res) => {
           } else {
             // Generate fee slip for this student
             const monthlyFee = parseFloat(student.monthly_fee) || 0;
+            const transportFee = parseFloat(student.transport_fee) || 0;
             const arrears = 0; // Simplified for bulk generation
             const fine = 0;
             const discount = 0;
-            const totalAmount = monthlyFee + arrears + fine - discount;
+            const totalAmount =
+              monthlyFee + transportFee + arrears + fine - discount;
             const dueDate = new Date(year, month - 1, 10); // month is 0-indexed
 
             const insertQuery = `
               INSERT INTO fee_slips (
                 slip_id, student_id, admission_number, student_name, class_name,
-                month, year, monthly_fee, arrears_amount, fine_amount, 
+                month, year, monthly_fee, transport_fee, arrears_amount, fine_amount, 
                 discount_amount, total_amount, due_date, barcode_data
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `;
 
             const values = [
@@ -444,6 +470,7 @@ exports.generateAllFeeSlips = async (req, res) => {
               month,
               year,
               monthlyFee,
+              transportFee,
               arrears,
               fine,
               discount,
@@ -844,6 +871,18 @@ exports.generateFeeSlipPDF = async (req, res) => {
             color: #333;
             margin-top: 10px;
         }
+        .barcode-container {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+        .barcode-note {
+            margin-top: 8px;
+            color: #666;
+            font-style: italic;
+        }
         .due-date {
             color: #f44336;
             font-weight: bold;
@@ -933,7 +972,12 @@ exports.generateFeeSlipPDF = async (req, res) => {
                 <span class="info-label">Slip Number:</span>
                 <span class="info-value">${feeSlip.slip_id}</span>
             </div>
-            <div class="barcode-text">${feeSlip.barcode_data}</div>
+            <div class="barcode-container">
+                <div class="barcode-text">${feeSlip.barcode_data}</div>
+                <div class="barcode-note">
+                    <small>Portable barcode scanner compatible</small>
+                </div>
+            </div>
         </div>
 
         <div class="footer">
@@ -1215,17 +1259,118 @@ exports.getFeeSlipByBarcode = (req, res) => {
   }
 };
 
+// Generate barcode image for fee slip (for portable scanner compatibility)
+exports.generateBarcodeImage = async (req, res) => {
+  const { slipId } = req.params;
+
+  try {
+    // Get fee slip data
+    const query = `
+      SELECT slip_id, barcode_data 
+      FROM fee_slips 
+      WHERE slip_id = ?
+    `;
+
+    db.query(query, [slipId], (err, results) => {
+      if (err) {
+        console.error("Error fetching fee slip:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
+
+      if (results.length === 0) {
+        return res.status(404).json({ error: "Fee slip not found" });
+      }
+
+      const feeSlip = results[0];
+      const barcodeData = feeSlip.slip_id; // Use slip_id as barcode data
+
+      // Generate barcode image
+      const barcodeBuffer = generateBarcodeImage(barcodeData, "CODE128");
+
+      if (!barcodeBuffer) {
+        return res.status(500).json({ error: "Failed to generate barcode" });
+      }
+
+      // Set response headers
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="barcode_${slipId}.png"`
+      );
+
+      // Send barcode image
+      res.send(barcodeBuffer);
+    });
+  } catch (error) {
+    console.error("Error generating barcode image:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Generate barcode image for student (for portable scanner compatibility)
+exports.generateStudentBarcodeImage = async (req, res) => {
+  const { studentId } = req.params;
+
+  try {
+    // Get student data
+    const query = `
+      SELECT id, admission_number 
+      FROM students 
+      WHERE id = ?
+    `;
+
+    db.query(query, [studentId], (err, results) => {
+      if (err) {
+        console.error("Error fetching student:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
+
+      if (results.length === 0) {
+        return res.status(404).json({ error: "Student not found" });
+      }
+
+      const student = results[0];
+      const barcodeData = generateStudentBarcode(
+        student.id,
+        student.admission_number
+      );
+
+      // Generate barcode image
+      const barcodeBuffer = generateBarcodeImage(barcodeData, "CODE128");
+
+      if (!barcodeBuffer) {
+        return res.status(500).json({ error: "Failed to generate barcode" });
+      }
+
+      // Set response headers
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="student_barcode_${studentId}.png"`
+      );
+
+      // Send barcode image
+      res.send(barcodeBuffer);
+    });
+  } catch (error) {
+    console.error("Error generating student barcode image:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 // Helper function to get comprehensive fee data including payment history
 exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
   // Get comprehensive payment and arrears information for this student
   const comprehensiveQuery = `
     SELECT 
       s.monthly_fee,
+      s.transport_fee,
       s.id as student_id,
       s.name as student_name,
       s.admission_number,
       s.father_name,
       s.cnic,
+      
       s.phone,
       s.profile_image,
       s.is_admission_paid,
@@ -1234,6 +1379,7 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
       COALESCE(fs.fine_amount, 0) as original_fine,
       COALESCE(fs.total_amount, 0) as total_due,
       COALESCE(fs.monthly_fee, 0) as slip_monthly_fee,
+      COALESCE(fs.transport_fee, 0) as slip_transport_fee,
       COALESCE(s.admission_fee_amount, 0) as slip_admission_fee,
       COALESCE(fs.discount_amount, 0) as discount_amount,
       fs.month as slip_month,
@@ -1331,7 +1477,9 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
 
     // Calculate current payment status
     const monthlyFee = parseFloat(studentData.monthly_fee) || 0;
+    const transportFee = parseFloat(studentData.transport_fee) || 0;
     const slipMonthlyFee = parseFloat(studentData.slip_monthly_fee) || 0;
+    const slipTransportFee = parseFloat(studentData.slip_transport_fee) || 0;
     const slipAdmissionFee = parseFloat(studentData.slip_admission_fee) || 0;
     const originalArrears = parseFloat(studentData.original_arrears) || 0;
     const originalFine = parseFloat(studentData.original_fine) || 0;
@@ -1403,7 +1551,8 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
 
         // If past due date, current month's remaining also becomes arrears
         if (isPastDueDate) {
-          const currentMonthExpected = slipAdmissionFee + slipMonthlyFee;
+          const currentMonthExpected =
+            slipAdmissionFee + slipMonthlyFee + slipTransportFee;
           const currentMonthPaid = Math.min(
             paidThisMonth,
             currentMonthExpected
@@ -1422,6 +1571,7 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
         const totalFeeForThisMonth =
           slipAdmissionFee +
           slipMonthlyFee +
+          slipTransportFee +
           updatedArrears +
           updatedFine -
           discountAmount;
@@ -1431,6 +1581,7 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
           student_id: studentId,
           slipAdmissionFee,
           slipMonthlyFee,
+          slipTransportFee,
           updatedArrears,
           updatedFine,
           discountAmount,
@@ -1524,6 +1675,7 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
         const totalExpected =
           slipAdmissionFee +
           slipMonthlyFee +
+          slipTransportFee +
           updatedArrears +
           updatedFine -
           discountAmount;
@@ -1537,9 +1689,13 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
         // Calculate total expected fees for this month
         // If past due date, include next month's fee + arrears
         const currentMonthFee = isPastDueDate ? slipMonthlyFee : slipMonthlyFee; // Include next month's fee
+        const currentMonthTransportFee = isPastDueDate
+          ? slipTransportFee
+          : slipTransportFee; // Include next month's transport fee
         const totalExpectedFees =
           admissionFeeToShow +
           currentMonthFee +
+          currentMonthTransportFee +
           updatedArrears +
           updatedFine -
           discountAmount;
@@ -1556,6 +1712,7 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
         // Calculate which fees are still due
         let admissionFeeDue = 0;
         let monthlyFeeDue = 0;
+        let transportFeeDue = 0;
         let arrearsDue = 0;
 
         // Use existing current month payment variables from above
@@ -1576,6 +1733,12 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
             remainingToDistribute -= monthlyFeeDue;
           }
 
+          // Then, pay transport fee (always include if not paid)
+          if (remainingToDistribute > 0 && slipTransportFee > 0) {
+            transportFeeDue = Math.min(remainingToDistribute, slipTransportFee);
+            remainingToDistribute -= transportFeeDue;
+          }
+
           // Finally, any remaining goes to arrears
           if (remainingToDistribute > 0) {
             arrearsDue = remainingToDistribute;
@@ -1586,6 +1749,7 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
         if (remainingBalance <= 0) {
           admissionFeeDue = 0;
           monthlyFeeDue = 0;
+          transportFeeDue = 0;
           arrearsDue = 0;
         }
 
@@ -1595,10 +1759,13 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
         const expectedPayments = currentMonth;
         const expectedAmount = monthlyFee * expectedPayments;
 
-        // Determine if student has any outstanding amounts
+        // Determine if student has any outstanding amounts (including transport fees)
         const hasOutstandingAmounts =
-          remainingBalance > 0 || updatedArrears > 0 || updatedFine > 0;
-        const isFullyPaid = remainingBalance <= 0;
+          remainingBalance > 0 ||
+          updatedArrears > 0 ||
+          updatedFine > 0 ||
+          transportFeeDue > 0;
+        const isFullyPaid = remainingBalance <= 0 && transportFeeDue <= 0;
 
         // Return comprehensive fee slip data with payment status
         res.json({
@@ -1667,5 +1834,1769 @@ exports.getComprehensiveFeeData = (studentId, feeSlip, res) => {
         });
       }
     );
+  });
+};
+
+// Generate fee slip with two-column design (Parent's copy and School's copy) with barcode
+exports.generateFeeSlipWithBarcode = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Get fee slip data
+    const query = `
+      SELECT 
+        fs.*,
+        s.father_name,
+        s.cnic,
+        s.phone,
+        s.monthly_fee,
+        s.admission_fee_amount,
+        c.name as class_name
+      FROM fee_slips fs
+      LEFT JOIN students s ON fs.student_id = s.id
+      LEFT JOIN classes c ON s.class_id = c.id
+      WHERE fs.id = ?
+    `;
+
+    db.query(query, [id], async (err, results) => {
+      if (err) {
+        console.error("Error fetching fee slip:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
+
+      if (results.length === 0) {
+        return res.status(404).json({ error: "Fee slip not found" });
+      }
+
+      const feeSlip = results[0];
+
+      // Generate barcode for the fee slip
+      const barcodeData =
+        feeSlip.barcode_data ||
+        `FS${feeSlip.student_id.toString().padStart(4, "0")}${Date.now()
+          .toString()
+          .slice(-6)}`;
+
+      // Generate barcode image
+      const barcodeBuffer = generateBarcodeImage(barcodeData);
+
+      // Create PDF document
+      const PDFDocument = require("pdfkit");
+      const doc = new PDFDocument({
+        size: "A4",
+        layout: "landscape",
+        margins: {
+          top: 20,
+          bottom: 20,
+          left: 20,
+          right: 20,
+        },
+      });
+
+      // Set response headers for browser display
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="fee-slip-${feeSlip.slip_id}.pdf"`
+      );
+
+      // Pipe PDF to response
+      doc.pipe(res);
+
+      // Function to draw a single fee slip copy
+      const drawFeeSlipCopy = (x, y, width, height, isParentCopy) => {
+        // Draw border around the entire slip
+        doc.rect(x, y, width, height).stroke("#000000");
+
+        // Header with date and time
+        const headerY = y + 10;
+
+        // Date and time in top-left
+        doc
+          .fontSize(9)
+          .font("Helvetica")
+          .fill("#000")
+          .text(
+            new Date().toLocaleDateString("en-GB") +
+              ", " +
+              new Date().toLocaleTimeString("en-GB", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            x + 10,
+            headerY
+          );
+
+        // Title in center
+        doc
+          .fontSize(16)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text("The Educator School", x + width / 2 - 80, headerY, {
+            align: "center",
+          });
+
+        // Subtitle
+        doc
+          .fontSize(14)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text("Fee Slip", x + width / 2 - 30, headerY + 25, {
+            align: "center",
+          });
+
+        // Student Information Section
+        const studentInfoY = headerY + 60;
+
+        // Section header
+        doc
+          .fontSize(12)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text("Student Information", x + 10, studentInfoY);
+
+        // Student details table
+        const detailY = studentInfoY + 20;
+        const detailWidth = width - 20;
+        const detailHeight = 20;
+
+        // Name row
+        doc
+          .rect(x + 10, detailY, detailWidth, detailHeight)
+          .fill("#f9f9f9")
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Name:", x + 15, detailY + 6)
+          .text(feeSlip.student_name || "Unknown", x + 100, detailY + 6);
+
+        // Admission Number row
+        doc
+          .rect(x + 10, detailY + detailHeight, detailWidth, detailHeight)
+          .fill("#ffffff")
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Admission Number:", x + 15, detailY + detailHeight + 6)
+          .text(
+            feeSlip.admission_number || `E-${feeSlip.student_id}`,
+            x + 100,
+            detailY + detailHeight + 6
+          );
+
+        // Father's Name row
+        doc
+          .rect(x + 10, detailY + detailHeight * 2, detailWidth, detailHeight)
+          .fill("#f9f9f9")
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Father's Name:", x + 15, detailY + detailHeight * 2 + 6)
+          .text(
+            feeSlip.father_name || "Unknown",
+            x + 100,
+            detailY + detailHeight * 2 + 6
+          );
+
+        // Class row
+        doc
+          .rect(x + 10, detailY + detailHeight * 3, detailWidth, detailHeight)
+          .fill("#ffffff")
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Class:", x + 15, detailY + detailHeight * 3 + 6)
+          .text(
+            feeSlip.class_name || "Not Assigned",
+            x + 100,
+            detailY + detailHeight * 3 + 6
+          );
+
+        // Payment Status Section
+        const paymentY = detailY + detailHeight * 4 + 20;
+
+        // Section header
+        doc
+          .fontSize(12)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text("August Payment Status", x + 10, paymentY);
+
+        // Payment details table
+        const paymentDetailY = paymentY + 20;
+        const paymentDetailWidth = width - 20;
+        const paymentDetailHeight = 20;
+
+        // Total Monthly Fee row
+        doc
+          .rect(x + 10, paymentDetailY, paymentDetailWidth, paymentDetailHeight)
+          .fill("#f9f9f9")
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Total Monthly Fee:", x + 15, paymentDetailY + 6)
+          .text(
+            `Rs. ${parseFloat(feeSlip.monthly_fee || 0).toFixed(2)}`,
+            x + 150,
+            paymentDetailY + 6
+          );
+
+        // August Paid row
+        doc
+          .rect(
+            x + 10,
+            paymentDetailY + paymentDetailHeight,
+            paymentDetailWidth,
+            paymentDetailHeight
+          )
+          .fill("#ffffff")
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text(
+            "August Paid:",
+            x + 15,
+            paymentDetailY + paymentDetailHeight + 6
+          )
+          .text("Rs. 0.00", x + 150, paymentDetailY + paymentDetailHeight + 6);
+
+        // Arrears row
+        doc
+          .rect(
+            x + 10,
+            paymentDetailY + paymentDetailHeight * 2,
+            paymentDetailWidth,
+            paymentDetailHeight
+          )
+          .fill("#f9f9f9")
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text(
+            "Arrears:",
+            x + 15,
+            paymentDetailY + paymentDetailHeight * 2 + 6
+          )
+          .text(
+            `Rs. ${parseFloat(feeSlip.monthly_fee || 0).toFixed(2)}`,
+            x + 150,
+            paymentDetailY + paymentDetailHeight * 2 + 6
+          );
+
+        // Total Amount
+        const totalAmount = parseFloat(feeSlip.monthly_fee || 0);
+        const totalY = paymentDetailY + paymentDetailHeight * 3 + 10;
+        doc
+          .fontSize(12)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text(
+            `Total Amount: Rs. ${totalAmount.toFixed(2)}`,
+            x + width - 150,
+            totalY,
+            { align: "right" }
+          );
+
+        // Payment Details
+        const paymentDetailsY = totalY + 20;
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Due Date:", x + width / 2 - 50, paymentDetailsY, {
+            align: "center",
+          })
+          .text(
+            new Date(feeSlip.due_date).toLocaleDateString("en-GB"),
+            x + width / 2 - 50,
+            paymentDetailsY + 15,
+            { align: "center" }
+          );
+
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Slip Number:", x + width / 2 - 50, paymentDetailsY + 35, {
+            align: "center",
+          })
+          .text(
+            feeSlip.slip_number || "FS" + Date.now(),
+            x + width / 2 - 50,
+            paymentDetailsY + 50,
+            { align: "center" }
+          );
+
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Barcode:", x + width / 2 - 50, paymentDetailsY + 70, {
+            align: "center",
+          })
+          .text(
+            feeSlip.slip_number || "FS" + Date.now(),
+            x + width / 2 - 50,
+            paymentDetailsY + 85,
+            { align: "center" }
+          );
+
+        // Barcode
+        const barcodeY = paymentDetailsY + 110;
+        const barcodeWidth = 200;
+        const barcodeHeight = 50;
+        const barcodeX = x + (width - barcodeWidth) / 2;
+
+        // Barcode container
+        doc
+          .rect(barcodeX, barcodeY, barcodeWidth, barcodeHeight)
+          .fill("#f0f0f0")
+          .stroke("#000000");
+
+        if (barcodeBuffer) {
+          doc.image(barcodeBuffer, barcodeX + 10, barcodeY + 5, {
+            width: barcodeWidth - 20,
+            height: barcodeHeight - 10,
+          });
+        } else {
+          // Fallback if barcode generation fails
+          doc
+            .fontSize(8)
+            .fill("#666")
+            .text(
+              "BARCODE",
+              barcodeX + barcodeWidth / 2 - 20,
+              barcodeY + barcodeHeight / 2
+            );
+        }
+
+        // Barcode text below
+        doc
+          .fontSize(9)
+          .font("Helvetica")
+          .fill("#000")
+          .text(
+            feeSlip.slip_number || "FS" + Date.now(),
+            barcodeX,
+            barcodeY + barcodeHeight + 5,
+            { align: "center", width: barcodeWidth }
+          );
+
+        // Footer
+        const footerY = y + height - 30;
+        doc
+          .fontSize(8)
+          .font("Helvetica")
+          .fill("#666")
+          .text(
+            `Generated on: ${new Date().toLocaleDateString(
+              "en-GB"
+            )}, ${new Date().toLocaleTimeString("en-GB")}`,
+            x + 10,
+            footerY,
+            { align: "center", width: width - 20 }
+          );
+      };
+
+      // Draw both copies
+      const copyWidth = (doc.page.width - 40) / 2 - 10;
+      const copyHeight = doc.page.height - 40;
+
+      // Parent's copy (left side)
+      drawFeeSlipCopy(20, 20, copyWidth, copyHeight, true);
+
+      // School's copy (right side)
+      drawFeeSlipCopy(
+        doc.page.width / 2 + 10,
+        20,
+        copyWidth,
+        copyHeight,
+        false
+      );
+
+      // Finalize PDF
+      doc.end();
+    });
+  } catch (error) {
+    console.error("Error generating fee slip PDF:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Generate fee slip with THE EDUCATORS design - 2 students per A4 page
+exports.generateEducatorsFeeSlip = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Get fee slip data
+    const query = `
+      SELECT 
+        fs.*,
+        s.father_name,
+        s.cnic,
+        s.phone,
+        s.monthly_fee,
+        s.admission_fee_amount,
+        s.admission_number,
+        c.name as class_name
+      FROM fee_slips fs
+      LEFT JOIN students s ON fs.student_id = s.id
+      LEFT JOIN classes c ON s.class_id = c.id
+      WHERE fs.id = ?
+    `;
+
+    db.query(query, [id], async (err, results) => {
+      if (err) {
+        console.error("Error fetching fee slip:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
+
+      if (results.length === 0) {
+        return res.status(404).json({ error: "Fee slip not found" });
+      }
+
+      const feeSlip = results[0];
+
+      // Calculate correct total amount
+      const tuitionFee = parseFloat(feeSlip.monthly_fee) || 0;
+      const transportFee = 0; // Currently not implemented
+      const annualFund = 0; // Currently not implemented
+      const arrears = parseFloat(feeSlip.arrears_amount) || 0;
+      const totalAmount = tuitionFee + transportFee + annualFund + arrears;
+
+      // Create PDF document in landscape mode
+      const PDFDocument = require("pdfkit");
+      const doc = new PDFDocument({
+        size: "A4",
+        layout: "landscape",
+        margins: {
+          top: 20,
+          bottom: 20,
+          left: 20,
+          right: 20,
+        },
+      });
+
+      // Set response headers for browser display
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="educators-fee-slip-${feeSlip.slip_id}.pdf"`
+      );
+
+      // Pipe PDF to response
+      doc.pipe(res);
+
+      // Function to draw THE EDUCATORS fee slip design - SINGLE SLIP
+      const drawEducatorsFeeSlip = (x, y, width, height, isParentCopy) => {
+        // Draw border around the slip
+        doc.rect(x, y, width, height).stroke("#000000");
+
+        // Header Section
+        const headerY = y + 10;
+        const centerX = x + width / 2;
+        const logoWidth = 100; // Width reserved for logos on each side
+        const textAreaWidth = width - logoWidth * 2; // Available width for text
+        const textStartX = x + logoWidth; // Starting position for centered text
+
+        // Left Logo (THE EDUCATORS Logo)
+        drawEducatorsLogo(doc, x, headerY, width);
+
+        // Right Logo (Beaconhouse Logo)
+        drawBeaconhouseLogo(doc, x, headerY, width);
+
+        // School Name (centered)
+        doc
+          .fontSize(18)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text("THE EDUCATORS", textStartX + textAreaWidth / 2, headerY + 15, {
+            align: "center",
+          });
+
+        // Campus Information
+        doc
+          .fontSize(12)
+          .font("Helvetica")
+          .fill("#000")
+          .text(
+            "Kohat road Campus",
+            textStartX + textAreaWidth / 2,
+            headerY + 35,
+            {
+              align: "center",
+            }
+          );
+
+        // Phone Number
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text(
+            "Phone : 091-2321029",
+            textStartX + textAreaWidth / 2,
+            headerY + 50,
+            {
+              align: "center",
+            }
+          );
+
+        // Slip Title
+        doc
+          .fontSize(14)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text(
+            "Monthly Fee Slip",
+            textStartX + textAreaWidth / 2,
+            headerY + 70,
+            { align: "center" }
+          );
+
+        // Copy Type (Parent's copy or School's copy)
+        doc
+          .fontSize(12)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text(
+            isParentCopy ? "Parent's copy" : "School's copy",
+            textStartX + textAreaWidth / 2,
+            headerY + 90,
+            { align: "center" }
+          );
+
+        // Student Information Table
+        const tableY = headerY + 120;
+        const tableWidth = width - 20;
+        const rowHeight = 25;
+
+        // Student ID and Class row
+        doc.rect(x + 10, tableY, tableWidth, rowHeight).stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Student ID", x + 15, tableY + 8)
+          .text(
+            `${
+              feeSlip.admission_number ||
+              `EDU-2025-${feeSlip.student_id.toString().padStart(4, "0")}`
+            } Class ${feeSlip.class_name || "N/A"}`,
+            x + 100,
+            tableY + 8
+          );
+
+        // Name row
+        doc
+          .rect(x + 10, tableY + rowHeight, tableWidth, rowHeight)
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Name", x + 15, tableY + rowHeight + 8)
+          .text(
+            feeSlip.student_name || "Unknown",
+            x + 100,
+            tableY + rowHeight + 8
+          );
+
+        // Father's Name row
+        doc
+          .rect(x + 10, tableY + rowHeight * 2, tableWidth, rowHeight)
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Father's Name", x + 15, tableY + rowHeight * 2 + 8)
+          .text(
+            feeSlip.father_name || "Unknown",
+            x + 100,
+            tableY + rowHeight * 2 + 8
+          );
+
+        // Fee Month and Due Date row
+        doc
+          .rect(x + 10, tableY + rowHeight * 3, tableWidth, rowHeight)
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Fee Month", x + 15, tableY + rowHeight * 3 + 8)
+          .text(
+            `${new Date(feeSlip.year, feeSlip.month - 1)
+              .toLocaleString("default", { month: "short" })
+              .toUpperCase()} Due Date ${new Date(
+              feeSlip.due_date
+            ).toLocaleDateString("en-GB")}`,
+            x + 100,
+            tableY + rowHeight * 3 + 8
+          );
+
+        // Fee Breakdown Table
+        const feeTableY = tableY + rowHeight * 4 + 20;
+        const feeRowHeight = 20;
+
+        // Table header
+        doc.rect(x + 10, feeTableY, tableWidth, feeRowHeight).stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text("Particulars", x + 15, feeTableY + 6)
+          .text("Amount", x + width - 80, feeTableY + 6);
+
+        // Tuition Fee
+        doc
+          .rect(x + 10, feeTableY + feeRowHeight, tableWidth, feeRowHeight)
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Tuition Fee", x + 15, feeTableY + feeRowHeight + 6)
+          .text(
+            tuitionFee.toFixed(2),
+            x + width - 80,
+            feeTableY + feeRowHeight + 6
+          );
+
+        // Transport Fee
+        doc
+          .rect(x + 10, feeTableY + feeRowHeight * 2, tableWidth, feeRowHeight)
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Transport Fee", x + 15, feeTableY + feeRowHeight * 2 + 6)
+          .text(
+            transportFee.toFixed(2),
+            x + width - 80,
+            feeTableY + feeRowHeight * 2 + 6
+          );
+
+        // Annual Fund
+        doc
+          .rect(x + 10, feeTableY + feeRowHeight * 3, tableWidth, feeRowHeight)
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Annual Fund", x + 15, feeTableY + feeRowHeight * 3 + 6)
+          .text(
+            annualFund.toFixed(2),
+            x + width - 80,
+            feeTableY + feeRowHeight * 3 + 6
+          );
+
+        // Arrears
+        doc
+          .rect(x + 10, feeTableY + feeRowHeight * 4, tableWidth, feeRowHeight)
+          .stroke("#000000");
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Arrears", x + 15, feeTableY + feeRowHeight * 4 + 6)
+          .text(
+            arrears.toFixed(2),
+            x + width - 80,
+            feeTableY + feeRowHeight * 4 + 6
+          );
+
+        // Grand Total (with thicker border)
+        doc
+          .rect(x + 10, feeTableY + feeRowHeight * 5, tableWidth, feeRowHeight)
+          .stroke("#000000");
+        doc
+          .lineWidth(2)
+          .moveTo(x + 10, feeTableY + feeRowHeight * 5)
+          .lineTo(x + width - 10, feeTableY + feeRowHeight * 5)
+          .stroke("#000000")
+          .lineWidth(1);
+        doc
+          .fontSize(10)
+          .font("Helvetica-Bold")
+          .fill("#000")
+          .text("Grand Total", x + 15, feeTableY + feeRowHeight * 5 + 6)
+          .text(
+            totalAmount.toFixed(2),
+            x + width - 80,
+            feeTableY + feeRowHeight * 5 + 6
+          );
+
+        // Footer Section
+        const footerY = feeTableY + feeRowHeight * 6 + 20;
+
+        // Note section
+        doc
+          .fontSize(9)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Note:", x + 15, footerY)
+          .text(
+            "All dues must be paid on or before the due date.",
+            x + 15,
+            footerY + 15
+          );
+
+        // Only show the second note for parent's copy
+        if (isParentCopy) {
+          doc.text(
+            "This slip must be kept as an evidence of Payment.",
+            x + 15,
+            footerY + 30
+          );
+        }
+
+        // Signature line
+        doc
+          .fontSize(10)
+          .font("Helvetica")
+          .fill("#000")
+          .text("Signature", x + 15, footerY + 50);
+        doc
+          .lineWidth(1)
+          .moveTo(x + 15, footerY + 65)
+          .lineTo(x + 100, footerY + 65)
+          .stroke("#000000");
+      };
+
+      // Calculate page dimensions for two-side layout
+      const pageWidth = doc.page.width - 40; // Account for margins
+      const pageHeight = doc.page.height - 40;
+      const slipWidth = (pageWidth - 20) / 2; // Divide page width into 2 equal parts
+      const slipHeight = pageHeight; // Full height for each slip
+
+      // Draw both copies side by side
+      // Left side - Parent's copy
+      drawEducatorsFeeSlip(20, 20, slipWidth, slipHeight, feeSlip, true);
+
+      // Right side - School's copy
+      drawEducatorsFeeSlip(
+        20 + slipWidth + 20, // 20px margin between slips
+        20,
+        slipWidth,
+        slipHeight,
+        feeSlip,
+        false
+      );
+
+      // Add page break for second student (if needed for bulk printing)
+      // For now, we'll just show one student per page
+      // In bulk printing, we can add multiple students
+
+      // Finalize PDF
+      doc.end();
+    });
+  } catch (error) {
+    console.error("Error generating educators fee slip:", error);
+    res.status(500).json({ error: "Failed to generate fee slip" });
+  }
+};
+
+// Generate bulk fee slips with THE EDUCATORS design - 2 students per A4 page
+exports.generateBulkEducatorsFeeSlips = async (req, res) => {
+  const { student_ids } = req.body; // Array of student IDs
+
+  console.log(
+    "🔧 Generating bulk educators fee slips for students:",
+    student_ids
+  );
+
+  try {
+    if (
+      !student_ids ||
+      !Array.isArray(student_ids) ||
+      student_ids.length === 0
+    ) {
+      return res.status(400).json({ error: "Student IDs array is required" });
+    }
+
+    // Get fee slip data for all students
+    const query = `
+      SELECT 
+        fs.*,
+        s.father_name,
+        s.cnic,
+        s.phone,
+        s.monthly_fee,
+        s.admission_fee_amount,
+        c.name as class_name
+      FROM fee_slips fs
+      LEFT JOIN students s ON fs.student_id = s.id
+      LEFT JOIN classes c ON s.class_id = c.id
+      WHERE fs.student_id IN (${student_ids.map(() => "?").join(",")})
+      ORDER BY fs.student_id
+    `;
+
+    console.log("🔍 Executing database query for fee slips...");
+
+    db.query(query, student_ids, async (err, results) => {
+      if (err) {
+        console.error("Error fetching fee slips:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
+
+      if (results.length === 0) {
+        return res.status(404).json({ error: "No fee slips found" });
+      }
+
+      try {
+        // Create PDF document in landscape mode
+        const PDFDocument = require("pdfkit");
+        const doc = new PDFDocument({
+          size: "A4",
+          layout: "landscape",
+          margins: {
+            top: 20,
+            bottom: 20,
+            left: 20,
+            right: 20,
+          },
+        });
+
+        // Set response headers for browser display
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+          "Content-Disposition",
+          `inline; filename="bulk-educators-fee-slips-${
+            new Date().toISOString().split("T")[0]
+          }.pdf"`
+        );
+
+        // Set timeout to prevent hanging requests
+        res.setTimeout(30000, () => {
+          console.error("PDF generation timeout");
+          if (!res.headersSent) {
+            res.status(500).json({ error: "PDF generation timeout" });
+          }
+        });
+
+        // Handle PDF stream errors
+        doc.on("error", (err) => {
+          console.error("PDF stream error:", err);
+          if (!res.headersSent) {
+            res.status(500).json({ error: "PDF generation failed" });
+          }
+        });
+
+        // Pipe PDF to response
+        doc.pipe(res);
+
+        // Function to draw THE EDUCATORS fee slip design - MATCHING IMAGE
+        const drawEducatorsFeeSlip = (
+          x,
+          y,
+          width,
+          height,
+          feeSlip,
+          isParentCopy
+        ) => {
+          // Calculate correct total amount for this fee slip
+          const tuitionFee = parseFloat(feeSlip.monthly_fee) || 0;
+          const transportFee = parseFloat(feeSlip.transport_fee) || 0;
+          const admissionFee = parseFloat(feeSlip.admission_fee) || 0;
+          const annualFund = 0; // Currently not implemented
+          const arrears = parseFloat(feeSlip.arrears_amount) || 0;
+
+          // Background
+          doc.rect(x, y, width, height).fill("#ffffff");
+
+          // Header section - Matching the image design
+          const headerHeight = 100;
+
+          // Left logo (The Educators) - Matching admission slip exactly
+          try {
+            doc.image(
+              path.join(__dirname, "../assets/the-educators-logo.png"),
+              x + 20,
+              y + 15,
+              { width: 60, height: 50 }
+            );
+          } catch (error) {
+            // If logo not found, draw a placeholder
+            doc.rect(x + 20, y + 15, 60, 50).fill("#f0f0f0");
+            doc
+              .fontSize(12)
+              .fill("#666")
+              .text("LOGO", x + 25, y + 35);
+          }
+
+          // Right logo (Beaconhouse) - Matching admission slip exactly
+          try {
+            doc.image(
+              path.join(
+                __dirname,
+                "../assets/beaconhouse-school-system-logo.png"
+              ),
+              x + width - 80,
+              y + 15,
+              { width: 60, height: 50 }
+            );
+          } catch (error) {
+            // If logo not found, draw a placeholder
+            doc.rect(x + width - 80, y + 15, 60, 50).fill("#f0f0f0");
+            doc
+              .fontSize(12)
+              .fill("#666")
+              .text("LOGO", x + width - 75, y + 35);
+          }
+
+          // School name and details - Matching admission slip exactly
+          doc
+            .fontSize(16)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text("THE EDUCATORS", x + width / 2 - 80, y + 20);
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              "A project of Beaconhouse School System",
+              x + width / 2 - 100,
+              y + 40
+            );
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text("Kohat Road Campus", x + width / 2 - 60, y + 55);
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text("Session 2025-2026", x + width / 2 - 50, y + 70);
+
+          // Title - Matching admission slip exactly
+          doc
+            .fontSize(14)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text("MONTHLY FEE SLIP", x + width / 2 - 60, y + 90);
+
+          // Student information section - Matching the image structure
+          const tableY = y + 140;
+          const rowHeight = 25;
+          const labelX = x + 20;
+          const valueX = x + 120;
+
+          // Student ID
+          doc
+            .fontSize(11)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text("Student ID:", labelX, tableY);
+          doc
+            .fontSize(11)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              `${
+                feeSlip.admission_number ||
+                `E-${feeSlip.student_id.toString().padStart(3, "0")}`
+              }`,
+              valueX,
+              tableY
+            );
+
+          // Name
+          doc
+            .fontSize(11)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text("Name:", labelX, tableY + rowHeight);
+          doc
+            .fontSize(11)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              feeSlip.student_name || "Unknown",
+              valueX,
+              tableY + rowHeight
+            );
+
+          // Father's Name
+          doc
+            .fontSize(11)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text("Father's Name:", labelX, tableY + rowHeight * 2);
+          doc
+            .fontSize(11)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              feeSlip.father_name || "Unknown",
+              valueX,
+              tableY + rowHeight * 2
+            );
+
+          // Fee Month and Due Date (on same row)
+          const currentMonth = new Date()
+            .toLocaleString("default", { month: "short" })
+            .toUpperCase();
+          const dueDate = new Date(
+            feeSlip.due_date || new Date()
+          ).toLocaleDateString("en-GB");
+
+          doc
+            .fontSize(11)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text("Fee Month:", labelX, tableY + rowHeight * 3);
+          doc
+            .fontSize(11)
+            .font("Helvetica")
+            .fill("#000")
+            .text(currentMonth, valueX, tableY + rowHeight * 3);
+
+          // Due Date (on same row as Fee Month)
+          doc
+            .fontSize(11)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text("Due Date:", valueX + 80, tableY + rowHeight * 3);
+          doc
+            .fontSize(11)
+            .font("Helvetica")
+            .fill("#000")
+            .text(dueDate, valueX + 160, tableY + rowHeight * 3);
+
+          // Fees section - Matching the image structure
+          const feesY = tableY + rowHeight * 4 + 20;
+          const feeRowHeight = 20;
+
+          doc
+            .fontSize(12)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text("PARTICULARS & AMOUNT", x + 20, feesY + 4);
+
+          const feesTableY = feesY + 30;
+          let currentRow = 0;
+
+          // Admission Fee (only show if > 0)
+          if (admissionFee > 0) {
+            doc
+              .fontSize(10)
+              .font("Helvetica")
+              .fill("#000")
+              .text(
+                "Admission Fee:",
+                x + 20,
+                feesTableY + feeRowHeight * currentRow
+              );
+            doc
+              .fontSize(10)
+              .font("Helvetica")
+              .fill("#000")
+              .text(
+                `${admissionFee.toFixed(0)}`,
+                x + width - 100,
+                feesTableY + feeRowHeight * currentRow
+              );
+            currentRow++;
+          }
+
+          // Tuition Fee
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              "Tuition Fee:",
+              x + 20,
+              feesTableY + feeRowHeight * currentRow
+            );
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              `${tuitionFee.toFixed(0)}`,
+              x + width - 100,
+              feesTableY + feeRowHeight * currentRow
+            );
+          currentRow++;
+
+          // Transport Fee
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              "Transport Fee:",
+              x + 20,
+              feesTableY + feeRowHeight * currentRow
+            );
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              `${transportFee.toFixed(0)}`,
+              x + width - 100,
+              feesTableY + feeRowHeight * currentRow
+            );
+          currentRow++;
+
+          // Annual Fund
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              "Annual Fund:",
+              x + 20,
+              feesTableY + feeRowHeight * currentRow
+            );
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text("0", x + width - 100, feesTableY + feeRowHeight * currentRow);
+          currentRow++;
+
+          // Arrears
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text("Arrears:", x + 20, feesTableY + feeRowHeight * currentRow);
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text("0", x + width - 100, feesTableY + feeRowHeight * currentRow);
+          currentRow++;
+
+          // Calculate total (matching the image structure)
+          const totalAmount = admissionFee + tuitionFee + transportFee;
+
+          // Grand Total - Bold and prominent (matching the image)
+          doc
+            .fontSize(12)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text(
+              "Grand Total:",
+              x + 20,
+              feesTableY + feeRowHeight * currentRow
+            );
+          doc
+            .fontSize(12)
+            .font("Helvetica-Bold")
+            .fill("#000")
+            .text(
+              `${totalAmount.toFixed(0)}`,
+              x + width - 100,
+              feesTableY + feeRowHeight * currentRow
+            );
+
+          // Barcode section - Positioned between fees and signature
+          const barcodeY = feesTableY + feeRowHeight * (currentRow + 1) + 30;
+          const barcodeData =
+            feeSlip.slip_id || `FS${feeSlip.student_id}${Date.now()}`;
+          const barcodeImage = generateBarcodeImage(barcodeData);
+
+          if (barcodeImage) {
+            try {
+              doc.image(barcodeImage, x + 20, barcodeY, {
+                width: 150,
+                height: 40,
+              });
+            } catch (error) {
+              console.error("Error adding barcode image:", error);
+            }
+          }
+
+          // Barcode instruction
+          doc
+            .fontSize(9)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              "Scan this barcode for fee collection",
+              x + 20,
+              barcodeY + 55
+            );
+
+          // Signature and Stamp area - Positioned above the note text
+          const signatureY = y + height - 55; // 20px above the note text
+          const signatureBoxWidth = 120;
+          const signatureBoxHeight = 40;
+
+          // Draw signature box
+          doc
+            .rect(
+              x + width - signatureBoxWidth - 20,
+              signatureY,
+              signatureBoxWidth,
+              signatureBoxHeight
+            )
+            .stroke("#000000");
+
+          // Add signature label
+          doc
+            .fontSize(9)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              "Signature & Stamp",
+              x + width - signatureBoxWidth - 20 + signatureBoxWidth / 2 - 35,
+              signatureY - 10
+            );
+
+          // Note - Positioned above copy indicator
+          doc
+            .fontSize(10)
+            .font("Helvetica")
+            .fill("#000")
+            .text(
+              "All dues must be paid on or before the due date.",
+              x + 20,
+              y + height - 35
+            );
+
+          // Copy indicator - Clean and simple
+          if (isParentCopy) {
+            doc
+              .fontSize(10)
+              .font("Helvetica-Bold")
+              .fill("#000")
+              .text("PARENT COPY", x + 20, y + height - 15);
+          } else {
+            doc
+              .fontSize(10)
+              .font("Helvetica-Bold")
+              .fill("#000")
+              .text("SCHOOL COPY", x + 20, y + height - 15);
+          }
+        };
+
+        // Calculate page dimensions for two-side layout
+        const pageWidth = doc.page.width - 40; // Account for margins
+        const pageHeight = doc.page.height - 40;
+        const slipWidth = (pageWidth - 20) / 2; // Divide page width into 2 equal parts
+        const slipHeight = pageHeight; // Full height for each slip
+
+        // Process students one per page (left and right side)
+        console.log(
+          `📄 Processing ${results.length} students for two-side PDF generation...`
+        );
+
+        for (let i = 0; i < results.length; i++) {
+          console.log(`📄 Processing student ${i + 1}/${results.length}`);
+
+          // Add new page for each student (except first page)
+          if (i > 0) {
+            doc.addPage();
+          }
+
+          // Draw both copies side by side
+          const student = results[i];
+
+          // Left side - Parent's copy
+          drawEducatorsFeeSlip(20, 20, slipWidth, slipHeight, student, true);
+
+          // Right side - School's copy
+          drawEducatorsFeeSlip(
+            20 + slipWidth + 20, // 20px margin between slips
+            20,
+            slipWidth,
+            slipHeight,
+            student,
+            false
+          );
+        }
+
+        // Finalize PDF
+        doc.end();
+      } catch (error) {
+        console.error("Error in PDF generation:", error);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to generate PDF" });
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Error generating bulk educators fee slips:", error);
+    // Check if response has already been sent
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Failed to generate bulk fee slips" });
+    }
+  }
+};
+
+// Helper function to draw THE EDUCATORS logo - MATCHING SAMPLE
+const drawEducatorsLogo = (doc, x, y, width) => {
+  try {
+    const logoPath = path.join(
+      __dirname,
+      "../assets/the-educators-seeklogo.png"
+    );
+    console.log("🔍 Loading logo from:", logoPath);
+    console.log("🔍 Logo file exists:", fs.existsSync(logoPath));
+
+    if (fs.existsSync(logoPath)) {
+      // Logo size matching sample image
+      doc.image(logoPath, x + 20, y - 5, { width: 80, height: 30 });
+      console.log("✅ Logo loaded successfully");
+    } else {
+      console.log("⚠️ Logo file not found, using text fallback");
+      // Fallback to text if logo not found
+      doc
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .fill("#000")
+        .text("THE EDUCATORS", x + 20, y);
+    }
+  } catch (error) {
+    console.error("❌ Error loading logo:", error);
+    // Fallback to text
+    doc
+      .fontSize(12)
+      .font("Helvetica-Bold")
+      .fill("#000")
+      .text("THE EDUCATORS", x + 20, y);
+  }
+};
+
+// Helper function to draw Beaconhouse logo - MATCHING SAMPLE
+const drawBeaconhouseLogo = (doc, x, y, width) => {
+  try {
+    const logoPath = path.join(
+      __dirname,
+      "../assets/beaconhouse-school-system-logo-B8DD760BF0-seeklogo.com_-1-300x290.png"
+    );
+    console.log("🔍 Loading Beaconhouse logo from:", logoPath);
+    console.log("🔍 Beaconhouse logo file exists:", fs.existsSync(logoPath));
+
+    if (fs.existsSync(logoPath)) {
+      // Logo size matching sample image
+      doc.image(logoPath, x + width - 100, y - 5, { width: 80, height: 30 });
+      console.log("✅ Beaconhouse logo loaded successfully");
+    } else {
+      console.log("⚠️ Beaconhouse logo file not found, using text fallback");
+      // Fallback to text if logo not found
+      doc
+        .fontSize(12)
+        .font("Helvetica-Bold")
+        .fill("#000")
+        .text("BEACONHOUSE", x + width - 80, y);
+    }
+  } catch (error) {
+    console.error("❌ Error loading Beaconhouse logo:", error);
+    // Fallback to text
+    doc
+      .fontSize(12)
+      .font("Helvetica-Bold")
+      .fill("#000")
+      .text("BEACONHOUSE", x + width - 80, y);
+  }
+};
+
+// Get detailed fee breakdown for fee submission form
+exports.getDetailedFeeBreakdown = (req, res) => {
+  const { barcode } = req.params;
+
+  try {
+    // First, try to find by slip_id (if barcode is a slip number)
+    const slipQuery = `
+      SELECT 
+        fs.*,
+        s.name as student_name,
+        s.admission_number,
+        s.father_name,
+        s.cnic,
+        s.phone,
+        s.profile_image,
+        s.monthly_fee,
+        s.transport_fee,
+        s.admission_fee_amount,
+        s.is_admission_paid,
+        c.name as class_name
+      FROM fee_slips fs
+      LEFT JOIN students s ON fs.student_id = s.id
+      LEFT JOIN classes c ON s.class_id = c.id
+      WHERE fs.slip_id = ?
+      ORDER BY fs.month DESC, fs.year DESC
+      LIMIT 1
+    `;
+
+    db.query(slipQuery, [barcode], (err, slipResults) => {
+      if (err) {
+        console.error("Error fetching fee slip by slip ID:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
+
+      if (slipResults.length > 0) {
+        // Found by slip_id
+        const feeSlip = slipResults[0];
+        this.getDetailedFeeBreakdownData(feeSlip.student_id, feeSlip, res);
+        return;
+      }
+
+      // If not found by slip_id, try by barcode_data (student barcode)
+      const studentQuery = `
+        SELECT DISTINCT student_id 
+        FROM fee_slips 
+        WHERE barcode_data = ?
+        LIMIT 1
+      `;
+
+      db.query(studentQuery, [barcode], (err, studentResults) => {
+        if (err) {
+          console.error("Error fetching student by barcode:", err);
+          return res.status(500).json({ error: "Database error" });
+        }
+
+        if (studentResults.length === 0) {
+          return res.status(404).json({ error: "Fee slip not found" });
+        }
+
+        const studentId = studentResults[0].student_id;
+
+        // Get the latest fee slip for this student
+        const latestSlipQuery = `
+          SELECT 
+            fs.*,
+            s.name as student_name,
+            s.admission_number,
+            s.father_name,
+            s.cnic,
+            s.phone,
+            s.profile_image,
+            s.monthly_fee,
+            s.transport_fee,
+            s.admission_fee_amount,
+            s.is_admission_paid,
+            c.name as class_name
+          FROM fee_slips fs
+          LEFT JOIN students s ON fs.student_id = s.id
+          LEFT JOIN classes c ON s.class_id = c.id
+          WHERE fs.student_id = ?
+          ORDER BY fs.month DESC, fs.year DESC
+          LIMIT 1
+        `;
+
+        db.query(latestSlipQuery, [studentId], (err, latestResults) => {
+          if (err) {
+            console.error("Error fetching latest fee slip:", err);
+            return res.status(500).json({ error: "Database error" });
+          }
+
+          if (latestResults.length === 0) {
+            return res
+              .status(404)
+              .json({ error: "No fee slip found for student" });
+          }
+
+          const feeSlip = latestResults[0];
+          this.getDetailedFeeBreakdownData(studentId, feeSlip, res);
+        });
+      });
+    });
+  } catch (error) {
+    console.error("Error in getDetailedFeeBreakdown:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+// Helper function to get detailed fee breakdown data
+exports.getDetailedFeeBreakdownData = (studentId, feeSlip, res) => {
+  // Get comprehensive payment and arrears information for this student
+  const comprehensiveQuery = `
+    SELECT 
+      s.monthly_fee,
+      s.transport_fee,
+      s.id as student_id,
+      s.name as student_name,
+      s.admission_number,
+      s.father_name,
+      s.cnic,
+      s.phone,
+      s.profile_image,
+      s.is_admission_paid,
+      s.admission_fee_amount,
+      c.name as class_name,
+      COALESCE(fs.arrears_amount, 0) as original_arrears,
+      COALESCE(fs.fine_amount, 0) as original_fine,
+      COALESCE(fs.total_amount, 0) as total_due,
+      COALESCE(fs.monthly_fee, 0) as slip_monthly_fee,
+      COALESCE(fs.transport_fee, 0) as slip_transport_fee,
+      COALESCE(s.admission_fee_amount, 0) as slip_admission_fee,
+      COALESCE(fs.discount_amount, 0) as discount_amount,
+      fs.month as slip_month,
+      fs.year as slip_year,
+      fs.due_date,
+      fs.status as slip_status,
+      fs.slip_id,
+      fs.barcode_data,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type IN ('Monthly Fee', 'Admission Fee', 'Arrears', 'Fine', 'Transport Fee', 'Annual Fee')
+        AND f.month = fs.month
+        AND f.year = fs.year
+      ) as paid_this_month,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Monthly Fee'
+        AND f.month = fs.month
+        AND f.year = fs.year
+      ) as monthly_fee_paid_this_month,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Transport Fee'
+        AND f.month = fs.month
+        AND f.year = fs.year
+      ) as transport_fee_paid_this_month,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Admission Fee'
+        AND f.month = fs.month
+        AND f.year = fs.year
+      ) as admission_fee_paid_this_month,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Arrears'
+        AND f.month = fs.month
+        AND f.year = fs.year
+      ) as arrears_paid_this_month,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Fine'
+        AND f.month = fs.month
+        AND f.year = fs.year
+      ) as fine_paid_this_month,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Annual Fee'
+        AND f.month = fs.month
+        AND f.year = fs.year
+      ) as annual_fee_paid_this_month,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Monthly Fee'
+        AND YEAR(f.payment_date) = fs.year
+      ) as total_paid_this_year,
+      (
+        SELECT COUNT(*)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Monthly Fee'
+        AND YEAR(f.payment_date) = fs.year
+      ) as payments_made_this_year,
+      (
+        SELECT MAX(f.payment_date)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Monthly Fee'
+      ) as last_payment_date,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Arrears'
+      ) as total_arrears_paid,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Fine'
+      ) as total_fine_paid,
+      (
+        SELECT COALESCE(SUM(f.amount), 0)
+        FROM fees f
+        WHERE f.student_id = s.id 
+        AND f.fee_type = 'Annual Fee'
+      ) as total_annual_fee_paid
+    FROM students s
+    LEFT JOIN classes c ON s.class_id = c.id
+    LEFT JOIN fee_slips fs ON s.id = fs.student_id
+    WHERE s.id = ?
+    AND fs.id = ?
+  `;
+
+  db.query(comprehensiveQuery, [studentId, feeSlip.id], (err, results) => {
+    if (err) {
+      console.error("Error fetching detailed fee breakdown:", err);
+      return res.status(500).json({ error: "Database error" });
+    }
+
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Student data not found" });
+    }
+
+    const studentData = results[0];
+
+    // Calculate current payment status
+    const monthlyFee = parseFloat(studentData.monthly_fee) || 0;
+    const transportFee = parseFloat(studentData.transport_fee) || 0;
+    const slipMonthlyFee = parseFloat(studentData.slip_monthly_fee) || 0;
+    const slipTransportFee = parseFloat(studentData.slip_transport_fee) || 0;
+    const slipAdmissionFee = parseFloat(studentData.slip_admission_fee) || 0;
+    const originalArrears = parseFloat(studentData.original_arrears) || 0;
+    const originalFine = parseFloat(studentData.original_fine) || 0;
+    const discountAmount = parseFloat(studentData.discount_amount) || 0;
+
+    // Get payments made this month for each fee type
+    const paidThisMonth = parseFloat(studentData.paid_this_month) || 0;
+    const monthlyFeePaidThisMonth =
+      parseFloat(studentData.monthly_fee_paid_this_month) || 0;
+    const transportFeePaidThisMonth =
+      parseFloat(studentData.transport_fee_paid_this_month) || 0;
+    const admissionFeePaidThisMonth =
+      parseFloat(studentData.admission_fee_paid_this_month) || 0;
+    const arrearsPaidThisMonth =
+      parseFloat(studentData.arrears_paid_this_month) || 0;
+    const finePaidThisMonth = parseFloat(studentData.fine_paid_this_month) || 0;
+    const annualFeePaidThisMonth =
+      parseFloat(studentData.annual_fee_paid_this_month) || 0;
+
+    // Calculate remaining amounts for each fee type
+    const admissionFeeRemaining = Math.max(
+      0,
+      slipAdmissionFee - admissionFeePaidThisMonth
+    );
+    const monthlyFeeRemaining = Math.max(
+      0,
+      slipMonthlyFee - monthlyFeePaidThisMonth
+    );
+    const transportFeeRemaining = Math.max(
+      0,
+      slipTransportFee - transportFeePaidThisMonth
+    );
+    const arrearsRemaining = Math.max(
+      0,
+      originalArrears - arrearsPaidThisMonth
+    );
+    const fineRemaining = Math.max(0, originalFine - finePaidThisMonth);
+    const annualFeeRemaining = 0; // Annual fee is not in current slip
+
+    // Calculate total remaining balance
+    const totalRemaining =
+      admissionFeeRemaining +
+      monthlyFeeRemaining +
+      transportFeeRemaining +
+      arrearsRemaining +
+      fineRemaining +
+      annualFeeRemaining;
+
+    // Check if current date is past the due date (25th of the month)
+    const currentDate = new Date();
+    const dueDate = new Date(feeSlip.due_date);
+    const isPastDueDate = currentDate > dueDate;
+
+    // Return detailed fee breakdown
+    res.json({
+      message: "Detailed fee breakdown retrieved successfully",
+      student_info: {
+        id: studentData.student_id,
+        name: studentData.student_name,
+        admission_number: studentData.admission_number,
+        father_name: studentData.father_name,
+        class_name: studentData.class_name,
+        photo: studentData.profile_image,
+      },
+      fee_breakdown: {
+        admission_fee: {
+          expected: slipAdmissionFee,
+          paid: admissionFeePaidThisMonth,
+          remaining: admissionFeeRemaining,
+          is_paid: admissionFeeRemaining === 0 && slipAdmissionFee > 0,
+          is_pending: admissionFeeRemaining > 0 && slipAdmissionFee > 0,
+        },
+        monthly_fee: {
+          expected: slipMonthlyFee,
+          paid: monthlyFeePaidThisMonth,
+          remaining: monthlyFeeRemaining,
+          is_paid: monthlyFeeRemaining === 0 && slipMonthlyFee > 0,
+          is_pending: monthlyFeeRemaining > 0 && slipMonthlyFee > 0,
+        },
+        transport_fee: {
+          expected: slipTransportFee,
+          paid: transportFeePaidThisMonth,
+          remaining: transportFeeRemaining,
+          is_paid: transportFeeRemaining === 0 && slipTransportFee > 0,
+          is_pending: transportFeeRemaining > 0 && slipTransportFee > 0,
+        },
+        arrears: {
+          expected: originalArrears,
+          paid: arrearsPaidThisMonth,
+          remaining: arrearsRemaining,
+          is_paid: arrearsRemaining === 0 && originalArrears > 0,
+          is_pending: arrearsRemaining > 0 && originalArrears > 0,
+        },
+        fine: {
+          expected: originalFine,
+          paid: finePaidThisMonth,
+          remaining: fineRemaining,
+          is_paid: fineRemaining === 0 && originalFine > 0,
+          is_pending: fineRemaining > 0 && originalFine > 0,
+        },
+        annual_fee: {
+          expected: 0, // Not in current slip
+          paid: annualFeePaidThisMonth,
+          remaining: annualFeeRemaining,
+          is_paid: annualFeeRemaining === 0,
+          is_pending: annualFeeRemaining > 0,
+        },
+      },
+      payment_summary: {
+        total_expected:
+          slipAdmissionFee +
+          slipMonthlyFee +
+          slipTransportFee +
+          originalArrears +
+          originalFine,
+        total_paid: paidThisMonth,
+        total_remaining: totalRemaining,
+        is_fully_paid: totalRemaining === 0,
+        has_pending_transport_fee:
+          transportFeeRemaining > 0 && slipTransportFee > 0,
+        is_past_due_date: isPastDueDate,
+        slip_month: feeSlip.month,
+        slip_year: feeSlip.year,
+        due_date: feeSlip.due_date,
+      },
+    });
   });
 };

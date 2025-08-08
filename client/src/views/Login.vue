@@ -159,13 +159,10 @@ export default {
       this.error = "";
 
       try {
-        const response = await axios.post(
-          "http://localhost:8081/api/auth/login",
-          {
-            email: this.email,
-            password: this.password,
-          }
-        );
+        const response = await axios.post("/api/auth/login", {
+          email: this.email,
+          password: this.password,
+        });
 
         const { token, user } = response.data;
 
@@ -175,8 +172,6 @@ export default {
           name: user.name,
           email: user.email,
         });
-
-        console.log("Login successful, redirecting to:", user.role);
 
         // Redirect based on role
         if (user.role === "admin") {

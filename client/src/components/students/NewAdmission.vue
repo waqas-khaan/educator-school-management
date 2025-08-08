@@ -58,36 +58,6 @@
       <v-container fluid>
         <v-row>
           <v-col cols="12" lg="10" xl="8" class="mx-auto">
-            <!-- Progress Steps -->
-            <v-card class="mb-6 progress-card" elevation="0" rounded>
-              <v-card-text class="pa-6">
-                <div class="d-flex align-center justify-space-between mb-4">
-                  <h3 class="text-h6 font-weight-bold">
-                    Registration Progress
-                  </h3>
-                  <span class="text-caption text-medium-emphasis"
-                    >Step 1 of 4</span
-                  >
-                </div>
-                <v-progress-linear
-                  :value="25"
-                  color="primary"
-                  height="6"
-                  rounded
-                ></v-progress-linear>
-                <div class="d-flex justify-space-between mt-3">
-                  <span class="text-caption text-success font-weight-medium"
-                    >Personal Info</span
-                  >
-                  <span class="text-caption text-medium-emphasis">Fees</span>
-                  <span class="text-caption text-medium-emphasis">Address</span>
-                  <span class="text-caption text-medium-emphasis"
-                    >Documents</span
-                  >
-                </div>
-              </v-card-text>
-            </v-card>
-
             <!-- Main Form -->
             <v-card class="main-form-card" elevation="0" rounded="xl">
               <v-card-text class="pa-8">
@@ -218,12 +188,12 @@
                               readonly
                               v-bind="attrs"
                               v-on="on"
-                              :rules="[rules.required]"
                               outlined
-                              required
                               class="modern-input"
                               prepend-inner-icon="mdi-calendar"
                               dense
+                              hint="Optional field"
+                              persistent-hint
                             ></v-text-field>
                           </template>
                           <v-date-picker
@@ -314,27 +284,27 @@
                       <v-col cols="12" md="6">
                         <v-text-field
                           v-model.number="form.admission_fee"
-                          label="Admission Fee (PKR) - Optional"
+                          label="Rs - Registration Fee (PKR)"
                           type="number"
                           :rules="[rules.optionalPositive]"
                           outlined
-                          prefix="₨"
                           class="modern-input"
                           prepend-inner-icon="mdi-cash-plus"
                           dense
-                          placeholder="Leave empty for default amount"
+                          placeholder="Enter registration fee amount (0 or leave empty)"
+                          hint="Enter 0 or leave empty for no registration fee"
+                          persistent-hint
                         ></v-text-field>
                       </v-col>
 
                       <v-col cols="12" md="6">
                         <v-text-field
                           v-model.number="form.monthly_fee"
-                          label="Monthly Fee (PKR)"
+                          label="Rs - Monthly Fee (PKR)"
                           type="number"
                           :rules="[rules.required, rules.positive]"
                           outlined
                           required
-                          prefix="₨"
                           class="modern-input"
                           prepend-inner-icon="mdi-cash-multiple"
                           dense
@@ -342,15 +312,32 @@
                       </v-col>
 
                       <v-col cols="12" md="6">
-                        <v-text-field
-                          v-model.number="form.annual_fund"
-                          label="Annual Fund (PKR) - Optional"
-                          type="number"
-                          outlined
-                          prefix="₨"
-                          class="modern-input"
-                          prepend-inner-icon="mdi-cash"
+                        <v-checkbox
+                          v-model="form.transport_required"
+                          label="Transport Required"
+                          color="primary"
+                          class="modern-checkbox"
+                          prepend-icon="mdi-bus"
                           dense
+                          hint="Check if student requires transport service"
+                          persistent-hint
+                        ></v-checkbox>
+                      </v-col>
+
+                      <v-col cols="12" md="6">
+                        <v-text-field
+                          v-model.number="form.transport_fee"
+                          label="Rs - Transport Fee (PKR)"
+                          type="number"
+                          :rules="[rules.optionalPositive]"
+                          outlined
+                          class="modern-input"
+                          prepend-inner-icon="mdi-bus"
+                          dense
+                          placeholder="Enter transport fee amount (0 or leave empty)"
+                          hint="Enter 0 or leave empty for no transport fee"
+                          persistent-hint
+                          :disabled="!form.transport_required"
                         ></v-text-field>
                       </v-col>
                     </v-row>
@@ -488,7 +475,7 @@
                         <v-btn
                           color="secondary"
                           x-large
-                          @click="resetForm"
+                          @click="refreshPage"
                           :disabled="loading"
                           class="action-btn"
                           elevation="4"
@@ -537,6 +524,7 @@
 
 <script>
 import axios from "axios";
+import { getAuthData } from "@/utils/cookies";
 
 export default {
   name: "NewAdmission",
@@ -558,9 +546,10 @@ export default {
         date_of_birth: "",
         admission_date: "",
         class_id: "",
-        admission_fee: "",
+        admission_fee: "0",
         monthly_fee: "",
-        annual_fund: "",
+        transport_required: false,
+        transport_fee: "0",
         address: "",
         profile_image: null,
         admission_form: null,
@@ -596,7 +585,8 @@ export default {
           return isValid || "Invalid phone format. Use: +923349393936";
         },
         positive: (v) => v > 0 || "Value must be positive",
-        optionalPositive: (v) => !v || v > 0 || "Value must be positive",
+        optionalPositive: (v) =>
+          !v || v >= 0 || "Value must be zero or positive",
       },
     };
   },
@@ -615,31 +605,53 @@ export default {
     // Ensure form is properly initialized
     if (this.form) {
       this.form.admission_date = this.today;
-      this.generateAdmissionNumber();
+      await this.generateAdmissionNumber();
     }
   },
   methods: {
-    generateAdmissionNumber() {
-      const currentYear = new Date().getFullYear();
-      const timestamp = Date.now();
-      if (this.form) {
-        this.form.admission_number = `ADM-${currentYear}-${timestamp}`;
+    async generateAdmissionNumber() {
+      try {
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+
+        // Get the count of existing students to determine the next number
+        const response = await axios.get("/api/students", {
+          headers: headers,
+        });
+        const currentYear = new Date().getFullYear();
+        const nextNumber = response.data.length + 1;
+        const admissionNumber = `EDU-${currentYear}-${nextNumber
+          .toString()
+          .padStart(4, "0")}`;
+
+        if (this.form) {
+          this.form.admission_number = admissionNumber;
+        }
+      } catch (error) {
+        console.error("Error generating admission number:", error);
+        // Fallback to timestamp-based generation
+        const currentYear = new Date().getFullYear();
+        const timestamp = Date.now();
+        if (this.form) {
+          this.form.admission_number = `EDU-${currentYear}-${timestamp}`;
+        }
       }
     },
 
     async loadClasses() {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        console.log("User token:", user?.token);
-        console.log("User data:", user);
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
-        const response = await axios.get(
-          "http://localhost:8081/api/students/classes",
-          {
-            headers: { Authorization: user.token },
-          }
-        );
-        console.log("Classes response:", response.data);
+        const response = await axios.get("/api/students/classes", {
+          headers: headers,
+        });
         this.classes = response.data;
       } catch (error) {
         console.error("Error loading classes:", error);
@@ -665,21 +677,31 @@ export default {
 
       this.loading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const authData = getAuthData();
 
         // Create FormData for file uploads
         const formData = new FormData();
 
         // Add all form fields to FormData
         Object.keys(this.form).forEach((key) => {
-          if (this.form[key] !== null && this.form[key] !== "") {
-            if (key === "profile_image" || key === "admission_form") {
-              // Handle file uploads
-              if (this.form[key] instanceof File) {
-                formData.append(key, this.form[key]);
-              }
-            } else {
-              // Handle regular form fields
+          if (key === "profile_image" || key === "admission_form") {
+            // Handle file uploads
+            if (this.form[key] instanceof File) {
+              formData.append(key, this.form[key]);
+            }
+          } else {
+            // Handle regular form fields - always send admission_fee even if empty
+            if (key === "admission_fee") {
+              // Ensure admission_fee is always sent with a proper value
+              const admissionFeeValue = this.form[key] || "0";
+              formData.append(key, admissionFeeValue);
+            } else if (key === "transport_fee") {
+              // Handle transport fee based on checkbox
+              const transportFeeValue = this.form.transport_required
+                ? this.form[key] || "0"
+                : "0";
+              formData.append(key, transportFeeValue);
+            } else if (this.form[key] !== null && this.form[key] !== "") {
               formData.append(key, this.form[key]);
             }
           }
@@ -696,20 +718,61 @@ export default {
 
         console.log("Submitting form data with files");
 
-        await axios.post("http://localhost:8081/api/students", formData, {
+        const response = await axios.post("/api/students", formData, {
           headers: {
-            Authorization: user.token,
+            Authorization: `Bearer ${authData.token}`,
             "Content-Type": "multipart/form-data",
           },
         });
 
+        // Get the created student data
+        const studentData = response.data;
+        console.log("✅ Student created successfully:", studentData);
+
+        // Show success message
+        this.$toast?.success("Admission saved successfully!");
+
+        // Open admission slip in new tab
+        try {
+          const admissionSlipResponse = await axios.get(
+            `/api/admission-slips/${studentData.student_id}`,
+            {
+              headers: {
+                Authorization: `Bearer ${authData.token}`,
+              },
+              responseType: "blob",
+            }
+          );
+
+          // Create blob URL for the PDF
+          const blob = new Blob([admissionSlipResponse.data], {
+            type: "application/pdf",
+          });
+          const url = window.URL.createObjectURL(blob);
+
+          // Open PDF in a new tab
+          window.open(url, "_blank", "width=800,height=600");
+        } catch (slipError) {
+          console.error("Error generating admission slip:", slipError);
+          this.$toast?.warning(
+            "Admission saved but could not open slip automatically."
+          );
+        }
+
+        // Refresh the admission page
         this.successDialog = true;
         this.resetForm();
+
+        // Refresh the page after a short delay to show the success dialog
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       } catch (error) {
         console.error("Error submitting form:", error);
         console.error("Error response:", error.response?.data);
         this.error =
           error.response?.data?.error ||
+          error.message ||
           "Failed to submit form. Please try again.";
       } finally {
         this.loading = false;
@@ -747,6 +810,10 @@ export default {
       }
       this.form.admission_date = this.today;
       this.imagePreview = null;
+    },
+
+    refreshPage() {
+      window.location.reload();
     },
   },
 };
@@ -820,7 +887,7 @@ export default {
 /* Main Form Card */
 .main-form-card {
   background: white !important;
-  border: 1px solid #e9ecef !important;
+  border: 2px solid #2c3e50 !important;
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12) !important;
 }
 
@@ -865,6 +932,32 @@ export default {
 }
 
 .modern-input :deep(.v-icon) {
+  color: #667eea !important;
+}
+
+/* Modern Checkbox */
+.modern-checkbox {
+  font-family: "Inter", sans-serif !important;
+}
+
+.modern-checkbox :deep(.v-selection-control) {
+  background: #f8f9fa !important;
+  border-radius: 8px !important;
+  padding: 8px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.modern-checkbox :deep(.v-selection-control:hover) {
+  background: #ffffff !important;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.15) !important;
+}
+
+.modern-checkbox :deep(.v-label) {
+  color: #6c757d !important;
+  font-weight: 500 !important;
+}
+
+.modern-checkbox :deep(.v-icon) {
   color: #667eea !important;
 }
 

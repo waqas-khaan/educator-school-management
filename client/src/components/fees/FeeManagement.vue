@@ -231,6 +231,114 @@
                                   >Student Information</span
                                 >
                               </div>
+
+                              <!-- Enhanced Search Section -->
+                              <div class="mb-4">
+                                <v-text-field
+                                  v-model="studentSearchQuery"
+                                  label="Search by Student Name, Phone Number, Admission Number, CNIC, or Class"
+                                  outlined
+                                  @input="searchStudent"
+                                  @focus="onSearchFocus"
+                                  @blur="onSearchBlur"
+                                  @click:clear="clearStudentSearch"
+                                  class="enhanced-form-field"
+                                  prepend-inner-icon="mdi-magnify"
+                                  placeholder="Type to search for student or class..."
+                                  clearable
+                                  persistent-hint
+                                  hint="Search by any student identifier or class name"
+                                  :loading="studentSearchLoading"
+                                ></v-text-field>
+
+                                <!-- Search Results Dropdown -->
+                                <v-card
+                                  v-if="
+                                    studentSearchResults.length > 0 &&
+                                    studentSearchQuery &&
+                                    !selectedStudentInfo
+                                  "
+                                  class="search-results-dropdown mt-2"
+                                  elevation="4"
+                                  max-height="200"
+                                  style="overflow-y: auto"
+                                >
+                                  <v-list dense>
+                                    <v-list-item
+                                      v-for="student in studentSearchResults"
+                                      :key="student.id"
+                                      @click="selectStudentFromSearch(student)"
+                                      class="search-result-item"
+                                    >
+                                      <v-list-item-avatar
+                                        size="32"
+                                        class="mr-3"
+                                      >
+                                        <v-img
+                                          v-if="
+                                            student && student.profile_image
+                                          "
+                                          :src="`http://localhost:8081/uploads/profile-images/${student.profile_image}`"
+                                          alt="Student Photo"
+                                        ></v-img>
+                                        <v-img
+                                          v-else
+                                          :src="
+                                            getStudentAvatar(
+                                              student ? student.name : ''
+                                            )
+                                          "
+                                          alt="Student Avatar"
+                                        ></v-img>
+                                      </v-list-item-avatar>
+                                      <v-list-item-content>
+                                        <v-list-item-title
+                                          class="font-weight-bold"
+                                        >
+                                          {{
+                                            student
+                                              ? student.name || "N/A"
+                                              : "N/A"
+                                          }}
+                                        </v-list-item-title>
+                                        <v-list-item-subtitle>
+                                          {{
+                                            student
+                                              ? student.admission_number ||
+                                                "N/A"
+                                              : "N/A"
+                                          }}
+                                          •
+                                          <span
+                                            class="font-weight-medium text-primary"
+                                            >{{
+                                              student
+                                                ? student.class_name || "N/A"
+                                                : "N/A"
+                                            }}</span
+                                          >
+                                        </v-list-item-subtitle>
+                                        <v-list-item-subtitle
+                                          class="text-caption"
+                                        >
+                                          {{
+                                            student
+                                              ? student.phone || "N/A"
+                                              : "N/A"
+                                          }}
+                                          •
+                                          {{
+                                            student
+                                              ? student.cnic || "N/A"
+                                              : "N/A"
+                                          }}
+                                        </v-list-item-subtitle>
+                                      </v-list-item-content>
+                                    </v-list-item>
+                                  </v-list>
+                                </v-card>
+                              </div>
+
                               <div class="d-flex align-center">
                                 <v-text-field
                                   v-model="feeSubmission.admission_number"
@@ -246,12 +354,20 @@
                                 <v-btn
                                   color="primary"
                                   icon
-                                  @click="openBarcodeScanner"
-                                  :loading="scanningBarcode"
-                                  class="scanner-btn"
-                                  title="Scan Fee Slip Barcode"
+                                  @click="openManualBarcodeInput"
+                                  class="scanner-btn mr-2"
+                                  title="Scan Fee Slip Barcode (Manual Input)"
                                 >
                                   <v-icon>mdi-qrcode-scan</v-icon>
+                                </v-btn>
+                                <v-btn
+                                  color="secondary"
+                                  icon
+                                  @click="openBarcodeScanner"
+                                  class="scanner-btn"
+                                  title="Scan Barcode with Camera"
+                                >
+                                  <v-icon>mdi-camera</v-icon>
                                 </v-btn>
                               </div>
 
@@ -419,7 +535,10 @@
                                 <div class="d-flex align-center">
                                   <v-avatar size="32" class="mr-3">
                                     <v-img
-                                      v-if="selectedStudentInfo?.photo"
+                                      v-if="
+                                        selectedStudentInfo &&
+                                        selectedStudentInfo.photo
+                                      "
                                       :src="`http://localhost:8081/uploads/profile-images/${selectedStudentInfo.photo}`"
                                       alt="Student Photo"
                                     ></v-img>
@@ -427,7 +546,9 @@
                                       v-else
                                       :src="
                                         getStudentAvatar(
-                                          selectedStudentInfo?.name
+                                          selectedStudentInfo
+                                            ? selectedStudentInfo.name
+                                            : ''
                                         )
                                       "
                                       alt="Student Avatar"
@@ -435,18 +556,27 @@
                                   </v-avatar>
                                   <div class="flex-grow-1">
                                     <div class="font-weight-bold">
-                                      {{ selectedStudentInfo.name }}
+                                      {{
+                                        selectedStudentInfo
+                                          ? selectedStudentInfo.name
+                                          : "No Student Selected"
+                                      }}
                                     </div>
                                     <div class="text-caption text-grey">
                                       Class:
                                       {{
-                                        selectedStudentInfo.class_name || "N/A"
+                                        selectedStudentInfo
+                                          ? selectedStudentInfo.class_name ||
+                                            "N/A"
+                                          : "N/A"
                                       }}
                                     </div>
                                   </div>
                                   <!-- Payment Status Indicator -->
                                   <v-chip
-                                    v-if="studentArrearsInfo"
+                                    v-if="
+                                      selectedStudentInfo && studentArrearsInfo
+                                    "
                                     :color="
                                       studentArrearsInfo.is_overdue
                                         ? 'error'
@@ -511,104 +641,390 @@
                             outlined
                           >
                             <v-card-title class="pa-4 pb-2">
-                              <v-icon color="primary" class="mr-2"
-                                >mdi-cash-multiple</v-icon
+                              <div
+                                class="d-flex align-center justify-space-between w-100"
                               >
-                              <span class="text-h6 font-weight-bold"
-                                >Fee Components</span
-                              >
+                                <div class="d-flex align-center">
+                                  <v-icon color="primary" class="mr-2"
+                                    >mdi-cash-multiple</v-icon
+                                  >
+                                  <span class="text-h6 font-weight-bold"
+                                    >Fee Components</span
+                                  >
+                                </div>
+                              </div>
                             </v-card-title>
                             <v-card-text class="pa-4 pt-0">
                               <v-row>
                                 <v-col cols="12" sm="6" md="3">
-                                  <v-text-field
-                                    v-model.number="feeSubmission.admission_fee"
-                                    label="Admission Fee (One-time)"
-                                    type="number"
-                                    :rules="[rules.optionalPositive]"
+                                  <v-card
+                                    class="fee-component-card"
+                                    elevation="1"
                                     outlined
-                                    prefix="₨"
-                                    class="enhanced-form-field"
-                                    prepend-inner-icon="mdi-school"
-                                    color="info"
-                                    placeholder="0"
-                                    :hint="'One-time payment at admission'"
-                                    persistent-hint
-                                    @input="calculateTotalFee"
-                                  ></v-text-field>
+                                  >
+                                    <v-card-text class="pa-3">
+                                      <div class="d-flex align-center mb-2">
+                                        <v-checkbox
+                                          v-model="
+                                            feeSubmission.selected_fees
+                                              .admission_fee
+                                          "
+                                          color="primary"
+                                          hide-details
+                                          class="mr-2"
+                                          :disabled="
+                                            getAdmissionFeeRemaining() <= 0
+                                          "
+                                        ></v-checkbox>
+                                        <v-icon
+                                          :color="getAdmissionFeeIconColor()"
+                                          class="mr-2"
+                                        >
+                                          {{ getAdmissionFeeIcon() }}
+                                        </v-icon>
+                                        <span
+                                          class="text-subtitle-2 font-weight-bold"
+                                        >
+                                          Admission Fee
+                                        </span>
+                                        <v-spacer></v-spacer>
+                                        <v-chip
+                                          v-if="getAdmissionFeeStatus()"
+                                          :color="getAdmissionFeeStatusColor()"
+                                          size="small"
+                                        >
+                                          {{ getAdmissionFeeStatus() }}
+                                        </v-chip>
+                                      </div>
+                                      <v-text-field
+                                        v-model.number="
+                                          feeSubmission.admission_fee
+                                        "
+                                        label="Amount"
+                                        type="number"
+                                        :rules="[rules.optionalPositive]"
+                                        outlined
+                                        dense
+                                        prefix="₨"
+                                        class="enhanced-form-field"
+                                        placeholder="0"
+                                        :hint="getAdmissionFeeHint()"
+                                        persistent-hint
+                                        @input="calculateTotalFee"
+                                        :disabled="
+                                          !feeSubmission.selected_fees
+                                            .admission_fee
+                                        "
+                                      ></v-text-field>
+                                    </v-card-text>
+                                  </v-card>
                                 </v-col>
 
                                 <v-col cols="12" sm="6" md="3">
-                                  <v-text-field
-                                    v-model.number="feeSubmission.monthly_fee"
-                                    label="Monthly Fee (Optional)"
-                                    type="number"
-                                    :rules="[rules.optionalPositive]"
+                                  <v-card
+                                    class="fee-component-card"
+                                    elevation="1"
                                     outlined
-                                    prefix="₨"
-                                    class="enhanced-form-field"
-                                    prepend-inner-icon="mdi-calendar-month"
-                                    color="primary"
-                                    placeholder="0"
-                                    :hint="
-                                      remainingArrears > 0
-                                        ? `Previous arrears: ₨${remainingArrears}`
-                                        : ''
-                                    "
-                                    persistent-hint
-                                    @input="calculateTotalFee"
-                                  ></v-text-field>
+                                  >
+                                    <v-card-text class="pa-3">
+                                      <div class="d-flex align-center mb-2">
+                                        <v-checkbox
+                                          v-model="
+                                            feeSubmission.selected_fees
+                                              .monthly_fee
+                                          "
+                                          color="primary"
+                                          hide-details
+                                          class="mr-2"
+                                          :disabled="
+                                            getMonthlyFeeRemaining() <= 0
+                                          "
+                                        ></v-checkbox>
+                                        <v-icon
+                                          :color="getMonthlyFeeIconColor()"
+                                          class="mr-2"
+                                        >
+                                          {{ getMonthlyFeeIcon() }}
+                                        </v-icon>
+                                        <span
+                                          class="text-subtitle-2 font-weight-bold"
+                                        >
+                                          Monthly Fee
+                                        </span>
+                                        <v-spacer></v-spacer>
+                                        <v-chip
+                                          v-if="getMonthlyFeeStatus()"
+                                          :color="getMonthlyFeeStatusColor()"
+                                          size="small"
+                                        >
+                                          {{ getMonthlyFeeStatus() }}
+                                        </v-chip>
+                                      </div>
+                                      <v-text-field
+                                        v-model.number="
+                                          feeSubmission.monthly_fee
+                                        "
+                                        label="Amount"
+                                        type="number"
+                                        :rules="[rules.optionalPositive]"
+                                        outlined
+                                        dense
+                                        prefix="₨"
+                                        class="enhanced-form-field"
+                                        placeholder="0"
+                                        :hint="getMonthlyFeeHint()"
+                                        persistent-hint
+                                        @input="calculateTotalFee"
+                                        :disabled="
+                                          !feeSubmission.selected_fees
+                                            .monthly_fee
+                                        "
+                                      ></v-text-field>
+                                    </v-card-text>
+                                  </v-card>
                                 </v-col>
 
                                 <v-col cols="12" sm="6" md="3">
-                                  <v-text-field
-                                    v-model.number="feeSubmission.fine"
-                                    label="Fine (Optional)"
-                                    type="number"
-                                    :rules="[rules.optionalPositive]"
+                                  <v-card
+                                    class="fee-component-card"
+                                    elevation="1"
                                     outlined
-                                    prefix="₨"
-                                    @input="calculateTotalFee"
-                                    class="enhanced-form-field"
-                                    prepend-inner-icon="mdi-alert-circle"
-                                    color="error"
-                                    placeholder="0"
-                                  ></v-text-field>
+                                  >
+                                    <v-card-text class="pa-3">
+                                      <div class="d-flex align-center mb-2">
+                                        <v-checkbox
+                                          v-model="
+                                            feeSubmission.selected_fees.fine
+                                          "
+                                          color="primary"
+                                          hide-details
+                                          class="mr-2"
+                                          :disabled="getFineRemaining() <= 0"
+                                        ></v-checkbox>
+                                        <v-icon
+                                          :color="getFineIconColor()"
+                                          class="mr-2"
+                                        >
+                                          {{ getFineIcon() }}
+                                        </v-icon>
+                                        <span
+                                          class="text-subtitle-2 font-weight-bold"
+                                        >
+                                          Fine
+                                        </span>
+                                        <v-spacer></v-spacer>
+                                        <v-chip
+                                          v-if="getFineStatus()"
+                                          :color="getFineStatusColor()"
+                                          size="small"
+                                        >
+                                          {{ getFineStatus() }}
+                                        </v-chip>
+                                      </div>
+                                      <v-text-field
+                                        v-model.number="feeSubmission.fine"
+                                        label="Amount"
+                                        type="number"
+                                        :rules="[rules.optionalPositive]"
+                                        outlined
+                                        dense
+                                        prefix="₨"
+                                        class="enhanced-form-field"
+                                        placeholder="0"
+                                        :hint="getFineHint()"
+                                        persistent-hint
+                                        @input="calculateTotalFee"
+                                        :disabled="
+                                          !feeSubmission.selected_fees.fine
+                                        "
+                                      ></v-text-field>
+                                    </v-card-text>
+                                  </v-card>
                                 </v-col>
 
                                 <v-col cols="12" sm="6" md="3">
-                                  <v-text-field
-                                    v-model.number="feeSubmission.annual_fee"
-                                    label="Annual Fee (Optional)"
-                                    type="number"
-                                    :rules="[rules.optionalPositive]"
+                                  <v-card
+                                    class="fee-component-card"
+                                    elevation="1"
                                     outlined
-                                    prefix="₨"
-                                    @input="calculateTotalFee"
-                                    class="enhanced-form-field"
-                                    prepend-inner-icon="mdi-calendar-year"
-                                    color="success"
-                                    placeholder="0"
-                                  ></v-text-field>
+                                  >
+                                    <v-card-text class="pa-3">
+                                      <div class="d-flex align-center mb-2">
+                                        <v-checkbox
+                                          v-model="
+                                            feeSubmission.selected_fees
+                                              .transport_fee
+                                          "
+                                          color="primary"
+                                          hide-details
+                                          class="mr-2"
+                                          :disabled="
+                                            getTransportFeeRemaining() <= 0
+                                          "
+                                        ></v-checkbox>
+                                        <v-icon
+                                          :color="getTransportFeeIconColor()"
+                                          class="mr-2"
+                                        >
+                                          {{ getTransportFeeIcon() }}
+                                        </v-icon>
+                                        <span
+                                          class="text-subtitle-2 font-weight-bold"
+                                        >
+                                          Transport Fee
+                                        </span>
+                                        <v-spacer></v-spacer>
+                                        <v-chip
+                                          v-if="getTransportFeeStatus()"
+                                          :color="getTransportFeeStatusColor()"
+                                          size="small"
+                                        >
+                                          {{ getTransportFeeStatus() }}
+                                        </v-chip>
+                                      </div>
+                                      <v-text-field
+                                        v-model.number="
+                                          feeSubmission.transport_fee
+                                        "
+                                        label="Amount"
+                                        type="number"
+                                        :rules="[rules.optionalPositive]"
+                                        outlined
+                                        dense
+                                        prefix="₨"
+                                        class="enhanced-form-field"
+                                        placeholder="0"
+                                        :hint="getTransportFeeHint()"
+                                        persistent-hint
+                                        @input="calculateTotalFee"
+                                        :disabled="
+                                          !feeSubmission.selected_fees
+                                            .transport_fee
+                                        "
+                                      ></v-text-field>
+                                    </v-card-text>
+                                  </v-card>
                                 </v-col>
 
                                 <v-col cols="12" sm="6" md="3">
-                                  <v-text-field
-                                    v-model="feeSubmission.arrears"
-                                    label="Arrears"
+                                  <v-card
+                                    class="fee-component-card"
+                                    elevation="1"
                                     outlined
-                                    prefix="₨"
-                                    class="enhanced-form-field"
-                                    prepend-inner-icon="mdi-clock-alert"
-                                    color="warning"
-                                    type="number"
-                                    :hint="
-                                      feeSubmission.arrears > 0
-                                        ? 'Previous unpaid amount from earlier months'
-                                        : 'No outstanding arrears'
-                                    "
-                                    persistent-hint
-                                  ></v-text-field>
+                                  >
+                                    <v-card-text class="pa-3">
+                                      <div class="d-flex align-center mb-2">
+                                        <v-checkbox
+                                          v-model="
+                                            feeSubmission.selected_fees
+                                              .annual_fee
+                                          "
+                                          color="primary"
+                                          hide-details
+                                          class="mr-2"
+                                          :disabled="
+                                            getAnnualFeeRemaining() <= 0
+                                          "
+                                        ></v-checkbox>
+                                        <v-icon
+                                          :color="getAnnualFeeIconColor()"
+                                          class="mr-2"
+                                        >
+                                          {{ getAnnualFeeIcon() }}
+                                        </v-icon>
+                                        <span
+                                          class="text-subtitle-2 font-weight-bold"
+                                        >
+                                          Annual Fee
+                                        </span>
+                                        <v-spacer></v-spacer>
+                                        <v-chip
+                                          v-if="getAnnualFeeStatus()"
+                                          :color="getAnnualFeeStatusColor()"
+                                          size="small"
+                                        >
+                                          {{ getAnnualFeeStatus() }}
+                                        </v-chip>
+                                      </div>
+                                      <v-text-field
+                                        v-model.number="
+                                          feeSubmission.annual_fee
+                                        "
+                                        label="Amount"
+                                        type="number"
+                                        :rules="[rules.optionalPositive]"
+                                        outlined
+                                        dense
+                                        prefix="₨"
+                                        class="enhanced-form-field"
+                                        placeholder="0"
+                                        :hint="getAnnualFeeHint()"
+                                        persistent-hint
+                                        @input="calculateTotalFee"
+                                        :disabled="
+                                          !feeSubmission.selected_fees
+                                            .annual_fee
+                                        "
+                                      ></v-text-field>
+                                    </v-card-text>
+                                  </v-card>
+                                </v-col>
+
+                                <v-col cols="12" sm="6" md="3">
+                                  <v-card
+                                    class="fee-component-card"
+                                    elevation="1"
+                                    outlined
+                                  >
+                                    <v-card-text class="pa-3">
+                                      <div class="d-flex align-center mb-2">
+                                        <v-checkbox
+                                          v-model="
+                                            feeSubmission.selected_fees.arrears
+                                          "
+                                          color="primary"
+                                          hide-details
+                                          class="mr-2"
+                                          :disabled="getArrearsRemaining() <= 0"
+                                        ></v-checkbox>
+                                        <v-icon
+                                          :color="getArrearsIconColor()"
+                                          class="mr-2"
+                                        >
+                                          {{ getArrearsIcon() }}
+                                        </v-icon>
+                                        <span
+                                          class="text-subtitle-2 font-weight-bold"
+                                        >
+                                          Arrears
+                                        </span>
+                                        <v-spacer></v-spacer>
+                                        <v-chip
+                                          v-if="getArrearsStatus()"
+                                          :color="getArrearsStatusColor()"
+                                          size="small"
+                                        >
+                                          {{ getArrearsStatus() }}
+                                        </v-chip>
+                                      </div>
+                                      <v-text-field
+                                        v-model.number="feeSubmission.arrears"
+                                        label="Amount"
+                                        type="number"
+                                        outlined
+                                        dense
+                                        prefix="₨"
+                                        class="enhanced-form-field"
+                                        placeholder="0"
+                                        :hint="getArrearsHint()"
+                                        persistent-hint
+                                        @input="calculateTotalFee"
+                                        :disabled="
+                                          !feeSubmission.selected_fees.arrears
+                                        "
+                                      ></v-text-field>
+                                    </v-card-text>
+                                  </v-card>
                                 </v-col>
                               </v-row>
                             </v-card-text>
@@ -625,12 +1041,30 @@
                             outlined
                           >
                             <v-card-title class="pa-4 pb-2">
-                              <v-icon color="info" class="mr-2"
-                                >mdi-calculator</v-icon
+                              <div
+                                class="d-flex align-center justify-space-between w-100"
                               >
-                              <span class="text-h6 font-weight-bold"
-                                >Fee Summary</span
-                              >
+                                <div class="d-flex align-center">
+                                  <v-icon color="info" class="mr-2"
+                                    >mdi-calculator</v-icon
+                                  >
+                                  <span class="text-h6 font-weight-bold"
+                                    >Fee Summary</span
+                                  >
+                                </div>
+                                <div class="d-flex align-center ml-8">
+                                  <v-chip
+                                    color="primary"
+                                    size="small"
+                                    class="mr-2"
+                                  >
+                                    {{ selectedFeesCount }} Selected
+                                  </v-chip>
+                                  <v-chip color="success" size="small">
+                                    ₨{{ totalSelectedAmount }}
+                                  </v-chip>
+                                </div>
+                              </div>
                             </v-card-title>
                             <v-card-text class="pa-4 pt-0">
                               <v-row>
@@ -1156,12 +1590,17 @@
                     <v-col cols="12" md="4">
                       <v-text-field
                         v-model="searchQuery"
-                        label="Search by student name, CNIC, or admission number..."
+                        label="Search by Student Name, Phone Number, Admission Number, CNIC, or Class..."
                         prepend-inner-icon="mdi-magnify"
                         outlined
                         clearable
-                        @input="searchFees"
+                        @input="stableSearch"
+                        @keyup.enter="performSearch"
+                        @click:clear="clearMainSearch"
                         class="search-field"
+                        persistent-hint
+                        hint="Search across all fee records"
+                        placeholder="Type to search fees..."
                       ></v-text-field>
                     </v-col>
 
@@ -1273,7 +1712,7 @@
                               color="secondary"
                               size="small"
                               class="mr-3 action-button"
-                              @click="selectAllFees"
+                              @click="selectAllFeesTable"
                               prepend-icon="mdi-checkbox-multiple-marked"
                               elevation="2"
                               rounded
@@ -1334,15 +1773,21 @@
                           <div class="student-info">
                             <v-avatar size="40" class="mr-3">
                               <v-img
-                                :src="getStudentAvatar(item.student_name)"
+                                :src="
+                                  getStudentAvatar(
+                                    item ? item.student_name : ''
+                                  )
+                                "
                               ></v-img>
                             </v-avatar>
                             <div>
                               <div class="student-name">
-                                {{ item.student_name }}
+                                {{ item ? item.student_name || "N/A" : "N/A" }}
                               </div>
                               <div class="student-details">
-                                {{ item.admission_number || "N/A" }}
+                                {{
+                                  item ? item.admission_number || "N/A" : "N/A"
+                                }}
                               </div>
                             </div>
                           </div>
@@ -1382,6 +1827,7 @@
                             >
                               <v-icon>mdi-eye</v-icon>
                             </v-btn>
+
                             <v-btn
                               icon
                               small
@@ -1423,15 +1869,19 @@
                           <div class="student-info">
                             <v-avatar size="40" class="mr-3">
                               <v-img
-                                :src="getStudentAvatar(item.student_name)"
+                                :src="
+                                  getStudentAvatar(
+                                    item ? item.student_name : ''
+                                  )
+                                "
                               ></v-img>
                             </v-avatar>
                             <div>
                               <div class="student-name">
-                                {{ item.student_name }}
+                                {{ item ? item.student_name || "N/A" : "N/A" }}
                               </div>
                               <div class="student-details">
-                                {{ item.class_name || "N/A" }}
+                                {{ item ? item.class_name || "N/A" : "N/A" }}
                               </div>
                             </div>
                           </div>
@@ -1481,15 +1931,21 @@
                           <div class="student-info">
                             <v-avatar size="40" class="mr-3">
                               <v-img
-                                :src="getStudentAvatar(item.student_name)"
+                                :src="
+                                  getStudentAvatar(
+                                    item ? item.student_name : ''
+                                  )
+                                "
                               ></v-img>
                             </v-avatar>
                             <div>
                               <div class="student-name">
-                                {{ item.student_name }}
+                                {{ item ? item.student_name || "N/A" : "N/A" }}
                               </div>
                               <div class="student-details">
-                                {{ item.admission_number || "N/A" }}
+                                {{
+                                  item ? item.admission_number || "N/A" : "N/A"
+                                }}
                               </div>
                             </div>
                           </div>
@@ -1549,21 +2005,34 @@
                   <template v-slot:selection="{ item }">
                     <div class="d-flex align-center" v-if="item">
                       <v-avatar size="24" class="mr-2">
-                        <v-img :src="getStudentAvatar(item?.name)"></v-img>
+                        <v-img
+                          :src="getStudentAvatar(item ? item.name : '')"
+                        ></v-img>
                       </v-avatar>
-                      <span>{{ item.name }} - {{ item.admission_number }}</span>
+                      <span>{{
+                        item ? `${item.name} - ${item.admission_number}` : "N/A"
+                      }}</span>
                     </div>
                   </template>
                   <template v-slot:item="{ item }">
                     <div class="d-flex align-center">
                       <v-avatar size="32" class="mr-3">
-                        <v-img :src="getStudentAvatar(item?.name)"></v-img>
+                        <v-img
+                          :src="getStudentAvatar(item ? item.name : '')"
+                        ></v-img>
                       </v-avatar>
                       <div>
-                        <div class="font-weight-bold">{{ item.name }}</div>
+                        <div class="font-weight-bold">
+                          {{ item ? item.name : "N/A" }}
+                        </div>
                         <div class="text-caption text-grey">
-                          {{ item.admission_number }} - Class:
-                          {{ item.class_name || "N/A" }}
+                          {{
+                            item
+                              ? `${item.admission_number} - Class: ${
+                                  item.class_name || "N/A"
+                                }`
+                              : "N/A"
+                          }}
                         </div>
                       </div>
                     </div>
@@ -1789,8 +2258,8 @@
       </v-card>
     </v-dialog>
 
-    <!-- Barcode Scanner Dialog -->
-    <v-dialog v-model="showBarcodeScanner" max-width="600" persistent>
+    <!-- Barcode Input Dialog -->
+    <v-dialog v-model="showManualBarcodeInput" max-width="500" persistent>
       <v-card>
         <v-card-title class="primary white--text">
           <v-icon left>mdi-qrcode-scan</v-icon>
@@ -1799,45 +2268,765 @@
         <v-card-text class="pa-6">
           <div class="text-center">
             <p class="mb-4">
-              Point your camera at the fee slip barcode to automatically fill
-              the form
+              Enter the barcode manually to automatically fill the form
             </p>
-            <div class="scanner-container">
-              <video
-                ref="barcodeVideo"
-                autoplay
-                playsinline
-                muted
-                class="scanner-video"
-                style="
-                  width: 100%;
-                  max-width: 400px;
-                  height: 300px;
-                  border: 2px solid #ddd;
-                  border-radius: 8px;
-                  background: #000;
-                "
-              ></video>
-              <div class="scanner-overlay">
-                <div class="scanner-guide"></div>
-              </div>
+            <v-text-field
+              v-model="manualBarcodeValue"
+              label="Enter Barcode"
+              outlined
+              dense
+              placeholder="e.g., FS0083820577243"
+              @keyup.enter="processManualBarcode"
+              autofocus
+              class="mb-4"
+            ></v-text-field>
+            <div class="text-caption text-medium-emphasis mb-4">
+              <v-icon left x-small>mdi-information</v-icon>
+              Supported formats: FS (Fee Slip) or ST (Student) barcodes
+            </div>
+            <div
+              class="text-caption text-medium-emphasis mb-4 pa-3"
+              style="background: #f5f5f5; border-radius: 4px"
+            >
+              <div class="font-weight-bold mb-1">Example Barcodes:</div>
+              <div class="text-caption">• Fee Slip: FS0083820577243</div>
+              <div class="text-caption">• Student: ST0008ADM123456789012</div>
+              <div class="text-caption">• Portable scanner compatible</div>
             </div>
             <div class="mt-4">
               <v-btn
                 color="secondary"
-                @click="closeBarcodeScanner"
+                @click="closeManualBarcodeInput"
                 class="mr-2"
               >
                 Cancel
               </v-btn>
               <v-btn
                 color="primary"
-                @click="manualBarcodeInput"
-                :loading="scanningBarcode"
+                @click="processManualBarcode"
+                :loading="processingManualBarcode"
+                :disabled="!manualBarcodeValue.trim()"
               >
+                <v-icon left>mdi-check</v-icon>
+                Process Barcode
+              </v-btn>
+            </div>
+          </div>
+        </v-card-text>
+      </v-card>
+    </v-dialog>
+
+    <!-- Receipt Dialog -->
+    <v-dialog v-model="showReceipt" max-width="900" persistent>
+      <v-card>
+        <v-card-title class="primary white--text">
+          <v-icon left>mdi-receipt</v-icon>
+          Fee Payment Receipt
+        </v-card-title>
+        <v-card-text class="pa-0" style="font-family: 'Times New Roman', serif">
+          <div
+            v-if="receiptData"
+            class="receipt-container"
+            style="
+              max-width: 148mm;
+              margin: 0 auto;
+              background: white;
+              border: 2px solid black;
+              max-height: 200mm;
+              display: flex;
+              flex-direction: column;
+              font-size: 10px;
+              overflow: hidden;
+            "
+          >
+            <!-- Header Section -->
+            <div
+              class="receipt-header"
+              style="
+                text-align: center;
+                padding: 6px;
+                border-bottom: 2px solid black;
+              "
+            >
+              <div style="font-size: 9px; margin-bottom: 4px">
+                {{ formatDate(receiptData.generated_at, "DD/MM/YYYY, HH:mm") }}
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                Fee Receipt
+              </div>
+
+              <h1
+                style="
+                  font-size: 16px;
+                  font-weight: bold;
+                  margin: 3px 0;
+                  letter-spacing: 1px;
+                "
+              >
+                THE EDUCATORS
+              </h1>
+              <div style="font-size: 9px; margin: 1px 0">
+                Kohat Road Peshawar
+              </div>
+
+              <h2
+                style="
+                  font-size: 12px;
+                  font-weight: bold;
+                  margin: 4px 0;
+                  letter-spacing: 1px;
+                "
+              >
+                FEE RECEIPT
+              </h2>
+
+              <div style="font-size: 10px">
+                <strong>Receipt No: {{ receiptData.receipt_number }}</strong>
+              </div>
+              <div style="font-size: 10px; margin-top: 2px">
+                Date:
+                {{
+                  formatDate(
+                    receiptData.generated_at,
+                    "MMMM DD, YYYY [at] HH:mm A"
+                  )
+                }}
+              </div>
+            </div>
+
+            <!-- Student Information Section -->
+            <div
+              class="student-info"
+              style="padding: 6px; border-bottom: 1px solid black"
+            >
+              <h3
+                style="
+                  font-size: 11px;
+                  font-weight: bold;
+                  margin-bottom: 4px;
+                  text-decoration: underline;
+                "
+              >
+                STUDENT INFORMATION
+              </h3>
+
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  margin-bottom: 10px;
+                "
+              >
+                <div style="flex: 1">
+                  <strong>Student Name:</strong>
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  {{ receiptData.student_info.name }}
+                </div>
+                <div style="flex: 1; text-align: right">
+                  <strong>Admission No:</strong>
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  {{ receiptData.student_info.admission_number }}
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: space-between">
+                <div style="flex: 1">
+                  <strong>Father's Name:</strong>
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  {{ receiptData.student_info.father_name }}
+                </div>
+                <div style="flex: 1; text-align: right">
+                  <strong>Class:</strong>
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  {{ receiptData.student_info.class_name }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Payment Details Section -->
+            <div
+              class="payment-details"
+              style="padding: 6px; border-bottom: 1px solid black"
+            >
+              <h3
+                style="
+                  font-size: 11px;
+                  font-weight: bold;
+                  margin-bottom: 4px;
+                  text-decoration: underline;
+                "
+              >
+                PAYMENT DETAILS
+              </h3>
+
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  margin-bottom: 10px;
+                "
+              >
+                <div style="flex: 1">
+                  <strong>Payment Date:</strong>
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  {{
+                    formatDate(
+                      receiptData.payment_details.payment_date,
+                      "MMMM DD, YYYY [at] HH:mm A"
+                    )
+                  }}
+                </div>
+                <div style="flex: 1; text-align: right">
+                  <strong>Payment Method:</strong>
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  {{ receiptData.payment_details.payment_method }}
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: space-between">
+                <div style="flex: 1">
+                  <strong>Amount Paid:</strong>
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  <span style="color: green; font-weight: bold"
+                    >Rs{{ receiptData.payment_details.amount_paid }}.00</span
+                  >
+                </div>
+                <div style="flex: 1; text-align: right">
+                  <strong>Fee Type:</strong>
+                  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                  {{ receiptData.payment_details.fee_type }}
+                </div>
+              </div>
+            </div>
+
+            <!-- Fee Breakdown Table -->
+            <div class="fee-breakdown" style="padding: 6px; flex: 1">
+              <h3
+                style="
+                  font-size: 11px;
+                  font-weight: bold;
+                  margin-bottom: 4px;
+                  text-decoration: underline;
+                "
+              >
+                FEE BREAKDOWN
+              </h3>
+
+              <table
+                style="
+                  width: 100%;
+                  border-collapse: collapse;
+                  margin-bottom: 6px;
+                  font-size: 9px;
+                "
+              >
+                <thead>
+                  <tr style="border-bottom: 2px solid black">
+                    <th
+                      style="text-align: left; padding: 3px; font-weight: bold"
+                    >
+                      Fee Type
+                    </th>
+                    <th
+                      style="
+                        text-align: center;
+                        padding: 3px;
+                        font-weight: bold;
+                      "
+                    >
+                      Expected Amount
+                    </th>
+                    <th
+                      style="
+                        text-align: center;
+                        padding: 3px;
+                        font-weight: bold;
+                      "
+                    >
+                      Paid Amount
+                    </th>
+                    <th
+                      style="
+                        text-align: center;
+                        padding: 3px;
+                        font-weight: bold;
+                      "
+                    >
+                      Remaining Amount
+                    </th>
+                    <th
+                      style="
+                        text-align: center;
+                        padding: 3px;
+                        font-weight: bold;
+                      "
+                    >
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-if="receiptData.fee_breakdown.admission_fee.expected > 0"
+                    style="border-bottom: 1px solid #ccc"
+                  >
+                    <td style="padding: 2px">Admission Fee</td>
+                    <td style="text-align: center; padding: 2px">
+                      Rs{{ receiptData.fee_breakdown.admission_fee.expected }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 2px;
+                        color: green;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.admission_fee.paid }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 2px;
+                        color: orange;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.admission_fee.remaining }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 2px;
+                        font-weight: bold;
+                      "
+                    >
+                      {{ receiptData.fee_breakdown.admission_fee.status }}
+                    </td>
+                  </tr>
+                  <tr
+                    v-if="receiptData.fee_breakdown.monthly_fee.expected > 0"
+                    style="border-bottom: 1px solid #ccc"
+                  >
+                    <td style="padding: 8px">Monthly Fee</td>
+                    <td style="text-align: center; padding: 8px">
+                      Rs{{ receiptData.fee_breakdown.monthly_fee.expected }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: green;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.monthly_fee.paid }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: orange;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.monthly_fee.remaining }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        font-weight: bold;
+                      "
+                    >
+                      {{ receiptData.fee_breakdown.monthly_fee.status }}
+                    </td>
+                  </tr>
+                  <tr
+                    v-if="receiptData.fee_breakdown.transport_fee.expected > 0"
+                    style="border-bottom: 1px solid #ccc"
+                  >
+                    <td style="padding: 8px">Transport Fee</td>
+                    <td style="text-align: center; padding: 8px">
+                      Rs{{ receiptData.fee_breakdown.transport_fee.expected }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: green;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.transport_fee.paid }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: orange;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.transport_fee.remaining }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        font-weight: bold;
+                      "
+                    >
+                      {{ receiptData.fee_breakdown.transport_fee.status }}
+                    </td>
+                  </tr>
+                  <tr
+                    v-if="receiptData.fee_breakdown.arrears.expected > 0"
+                    style="border-bottom: 1px solid #ccc"
+                  >
+                    <td style="padding: 8px">Arrears</td>
+                    <td style="text-align: center; padding: 8px">
+                      Rs{{ receiptData.fee_breakdown.arrears.expected }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: green;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.arrears.paid }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: orange;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.arrears.remaining }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        font-weight: bold;
+                      "
+                    >
+                      {{ receiptData.fee_breakdown.arrears.status }}
+                    </td>
+                  </tr>
+                  <tr
+                    v-if="receiptData.fee_breakdown.fine.expected > 0"
+                    style="border-bottom: 1px solid #ccc"
+                  >
+                    <td style="padding: 8px">Fine</td>
+                    <td style="text-align: center; padding: 8px">
+                      Rs{{ receiptData.fee_breakdown.fine.expected }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: green;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.fine.paid }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: orange;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.fine.remaining }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        font-weight: bold;
+                      "
+                    >
+                      {{ receiptData.fee_breakdown.fine.status }}
+                    </td>
+                  </tr>
+                  <tr
+                    v-if="receiptData.fee_breakdown.annual_fee.expected > 0"
+                    style="border-bottom: 1px solid #ccc"
+                  >
+                    <td style="padding: 8px">Annual Fee</td>
+                    <td style="text-align: center; padding: 8px">
+                      Rs{{ receiptData.fee_breakdown.annual_fee.expected }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: green;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.annual_fee.paid }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        color: orange;
+                        font-weight: bold;
+                      "
+                    >
+                      Rs{{ receiptData.fee_breakdown.annual_fee.remaining }}
+                    </td>
+                    <td
+                      style="
+                        text-align: center;
+                        padding: 8px;
+                        font-weight: bold;
+                      "
+                    >
+                      {{ receiptData.fee_breakdown.annual_fee.status }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <!-- Summary Boxes -->
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  margin-top: 6px;
+                "
+              >
+                <div
+                  style="
+                    border: 2px solid black;
+                    padding: 4px;
+                    text-align: center;
+                    flex: 1;
+                    margin-right: 10px;
+                  "
+                >
+                  <div style="font-weight: bold; margin-bottom: 10px">
+                    TOTAL EXPECTED
+                  </div>
+                  <div style="font-size: 11px; font-weight: bold">
+                    Rs{{ receiptData.summary.total_expected }}
+                  </div>
+                </div>
+                <div
+                  style="
+                    border: 2px solid black;
+                    padding: 4px;
+                    text-align: center;
+                    flex: 1;
+                    margin: 0 5px;
+                  "
+                >
+                  <div
+                    style="font-weight: bold; margin-bottom: 10px; color: green"
+                  >
+                    TOTAL PAID
+                  </div>
+                  <div style="font-size: 24px; font-weight: bold; color: green">
+                    Rs{{ receiptData.summary.total_paid }}
+                  </div>
+                </div>
+                <div
+                  style="
+                    border: 2px solid black;
+                    padding: 4px;
+                    text-align: center;
+                    flex: 1;
+                    margin-left: 10px;
+                  "
+                >
+                  <div
+                    style="font-weight: bold; margin-bottom: 6px; color: orange"
+                  >
+                    TOTAL REMAINING
+                  </div>
+                  <div
+                    style="font-size: 24px; font-weight: bold; color: orange"
+                  >
+                    Rs{{ receiptData.summary.total_remaining }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Payment Status -->
+            <div
+              style="
+                text-align: center;
+                padding: 20px;
+                border-top: 2px solid black;
+                border-bottom: 2px solid black;
+                background: #f5f5f5;
+              "
+            >
+              <div
+                style="
+                  font-size: 18px;
+                  font-weight: bold;
+                  padding: 10px;
+                  border: 2px solid black;
+                  display: inline-block;
+                  background: white;
+                "
+              >
+                {{
+                  receiptData.summary.payment_status === "PAID"
+                    ? "FULLY PAID"
+                    : receiptData.summary.payment_status
+                }}
+              </div>
+            </div>
+
+            <!-- Footer -->
+            <div style="padding: 8px 6px; text-align: center">
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  margin-bottom: 12px;
+                "
+              >
+                <div style="text-align: center; flex: 1">
+                  <div
+                    style="
+                      border-bottom: 1px solid black;
+                      width: 100px;
+                      margin: 0 auto;
+                      margin-bottom: 4px;
+                    "
+                  ></div>
+                  <div><strong>Student/Parent Signature</strong></div>
+                </div>
+                <div style="text-align: center; flex: 1">
+                  <div
+                    style="
+                      border-bottom: 1px solid black;
+                      width: 100px;
+                      margin: 0 auto;
+                      margin-bottom: 4px;
+                    "
+                  ></div>
+                  <div><strong>Authorized Signature</strong></div>
+                </div>
+              </div>
+
+              <div style="border-top: 1px solid black; padding-top: 20px">
+                <div style="font-size: 12px; margin-bottom: 5px">
+                  This is a computer generated receipt. No signature required.
+                </div>
+                <div style="font-size: 12px; font-weight: bold">
+                  Thank you for your payment!
+                </div>
+              </div>
+            </div>
+          </div>
+        </v-card-text>
+        <v-card-actions class="justify-center pa-4">
+          <v-btn color="secondary" class="mr-3" @click="closeReceipt">
+            <v-icon left>mdi-close</v-icon>
+            Close
+          </v-btn>
+          <v-btn color="primary" @click="printReceipt">
+            <v-icon left>mdi-printer</v-icon>
+            Print Receipt
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Payment Status -->
+    <div class="payment-status text-center mt-6">
+      <!-- Payment status content removed -->
+    </div>
+
+    <!-- Barcode Scanner Dialog -->
+    <v-dialog v-model="showBarcodeScanner" max-width="600" persistent>
+      <v-card>
+        <v-card-title class="primary white--text">
+          <v-icon left>mdi-qrcode-scan</v-icon>
+          Barcode Scanner
+        </v-card-title>
+        <v-card-text class="pa-6">
+          <div class="text-center">
+            <div class="scanner-container mb-4">
+              <div
+                ref="videoElement"
+                class="scanner-video"
+                style="
+                  width: 100%;
+                  max-width: 400px;
+                  height: 300px;
+                  border-radius: 8px;
+                  background: #f5f5f5;
+                "
+              ></div>
+            </div>
+
+            <div class="scanner-overlay" v-if="scanningBarcode">
+              <div class="scanning-indicator">
+                <v-icon size="24" color="white" class="scanning-icon"
+                  >mdi-qrcode-scan</v-icon
+                >
+                <span class="scanning-text">Scanning...</span>
+              </div>
+            </div>
+
+            <div class="scanner-controls mt-4">
+              <v-btn
+                color="secondary"
+                @click="closeBarcodeScanner"
+                class="mr-2"
+              >
+                <v-icon left>mdi-close</v-icon>
+                Cancel
+              </v-btn>
+              <v-btn
+                color="primary"
+                @click="toggleCamera"
+                :loading="cameraLoading"
+                class="mr-2"
+              >
+                <v-icon left>mdi-camera-switch</v-icon>
+                Switch Camera
+              </v-btn>
+              <v-btn color="warning" @click="testBarcodeDetection" class="mr-2">
+                <v-icon left>mdi-test-tube</v-icon>
+                Test Scan
+              </v-btn>
+              <v-btn color="info" @click="debugScanner" class="mr-2">
+                <v-icon left>mdi-bug</v-icon>
+                Debug
+              </v-btn>
+              <v-btn color="success" @click="manualBarcodeInput" class="mr-2">
                 <v-icon left>mdi-keyboard</v-icon>
                 Manual Input
               </v-btn>
+            </div>
+
+            <div class="scanner-info mt-4">
+              <div class="text-caption text-medium-emphasis">
+                <v-icon left x-small>mdi-information</v-icon>
+                Point camera at barcode to scan automatically
+              </div>
+              <div class="text-caption text-medium-emphasis mt-2">
+                Supported formats: FS (Fee Slip) barcodes
+              </div>
+              <div class="text-caption text-medium-emphasis mt-2">
+                <v-icon left x-small>mdi-help-circle</v-icon>
+                Try the "Test Scan" button to verify the scanner works
+              </div>
             </div>
           </div>
         </v-card-text>
@@ -1941,6 +3130,9 @@
 
 <script>
 import axios from "axios";
+import { getAuthData } from "@/utils/cookies";
+import BeaconhouseLogo from "@/assets/beaconhouse-school-system-logo-B8DD760BF0-seeklogo.com_-1-300x290.png";
+import EducatorsLogo from "@/assets/the-educators-seeklogo.png";
 
 export default {
   name: "FeeManagement",
@@ -1965,6 +3157,8 @@ export default {
       selectedStudentInfo: null,
       remainingArrears: 0, // Store remaining arrears amount
       studentArrearsInfo: null, // Store comprehensive arrears information
+      studentFeeBreakdown: null, // Store detailed fee breakdown
+      paymentSummary: null, // Store payment summary
       feeForm: {
         student_id: null,
         fee_type: "Monthly Fee",
@@ -1979,6 +3173,7 @@ export default {
         student_id: null,
         admission_fee: 0,
         monthly_fee: 0,
+        transport_fee: 0,
         arrears: 0,
         fine: 0,
         annual_fee: 0,
@@ -1988,6 +3183,14 @@ export default {
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
         remarks: "",
+        selected_fees: {
+          admission_fee: false,
+          monthly_fee: false,
+          transport_fee: false,
+          arrears: false,
+          fine: false,
+          annual_fee: false,
+        },
       },
       feeTypes: [
         "Monthly Fee",
@@ -2064,13 +3267,24 @@ export default {
         onConfirm: null,
         onCancel: null,
       },
+      // Barcode input properties
+      showManualBarcodeInput: false,
+      manualBarcodeValue: "",
+      processingManualBarcode: false,
       // Barcode scanner properties
-      scanningBarcode: false,
       showBarcodeScanner: false,
-      barcodeScannerStream: null,
-      barcodeReader: null,
-      scannerTimeout: null,
-      patternDetectionTimeout: null,
+      scanningBarcode: false,
+      cameraLoading: false,
+      stream: null,
+      barcodeDetectionInterval: null,
+      showReceipt: false,
+      receiptData: null,
+
+      // Enhanced search properties
+      studentSearchQuery: "",
+      studentSearchResults: [],
+      studentSearchTimeout: null,
+      studentSearchLoading: false,
     };
   },
   computed: {
@@ -2091,10 +3305,16 @@ export default {
       return this.fees.reduce((sum, fee) => sum + Number(fee.amount), 0);
     },
     totalPending() {
-      return this.pendingFees.reduce(
-        (sum, fee) => sum + Number(fee.arrears_amount),
-        0
-      );
+      const total = this.pendingFees.reduce((sum, fee) => {
+        const pendingAmount = Number(fee.arrears_amount) || 0;
+        console.log(
+          `🔍 Fee pending amount for ${fee.student_name}:`,
+          pendingAmount
+        );
+        return sum + pendingAmount;
+      }, 0);
+      console.log("📊 Total pending fees calculated:", total);
+      return total;
     },
     thisMonthCollection() {
       const currentMonth = new Date().getMonth() + 1;
@@ -2107,13 +3327,75 @@ export default {
       return this.students.length;
     },
     totalFee() {
-      const admissionFee = parseFloat(this.feeSubmission.admission_fee) || 0;
-      const monthlyFee = parseFloat(this.feeSubmission.monthly_fee) || 0;
-      const arrears = parseFloat(this.feeSubmission.arrears) || 0;
-      const fine = parseFloat(this.feeSubmission.fine) || 0;
-      const annualFee = parseFloat(this.feeSubmission.annual_fee) || 0;
+      // Only count fees that are selected AND have amounts greater than 0
+      const admissionFee =
+        this.feeSubmission.selected_fees.admission_fee &&
+        this.feeSubmission.admission_fee > 0
+          ? parseFloat(this.feeSubmission.admission_fee) || 0
+          : 0;
+      const monthlyFee =
+        this.feeSubmission.selected_fees.monthly_fee &&
+        this.feeSubmission.monthly_fee > 0
+          ? parseFloat(this.feeSubmission.monthly_fee) || 0
+          : 0;
+      const transportFee =
+        this.feeSubmission.selected_fees.transport_fee &&
+        this.feeSubmission.transport_fee > 0
+          ? parseFloat(this.feeSubmission.transport_fee) || 0
+          : 0;
+      const arrears =
+        this.feeSubmission.selected_fees.arrears &&
+        this.feeSubmission.arrears > 0
+          ? parseFloat(this.feeSubmission.arrears) || 0
+          : 0;
+      const fine =
+        this.feeSubmission.selected_fees.fine && this.feeSubmission.fine > 0
+          ? parseFloat(this.feeSubmission.fine) || 0
+          : 0;
+      const annualFee =
+        this.feeSubmission.selected_fees.annual_fee &&
+        this.feeSubmission.annual_fee > 0
+          ? parseFloat(this.feeSubmission.annual_fee) || 0
+          : 0;
 
-      return admissionFee + monthlyFee + arrears + fine + annualFee;
+      const total =
+        admissionFee + monthlyFee + transportFee + arrears + fine + annualFee;
+
+      console.log("🔍 Total fee calculation:", {
+        admissionFee: {
+          selected: this.feeSubmission.selected_fees.admission_fee,
+          amount: this.feeSubmission.admission_fee,
+          calculated: admissionFee,
+        },
+        monthlyFee: {
+          selected: this.feeSubmission.selected_fees.monthly_fee,
+          amount: this.feeSubmission.monthly_fee,
+          calculated: monthlyFee,
+        },
+        transportFee: {
+          selected: this.feeSubmission.selected_fees.transport_fee,
+          amount: this.feeSubmission.transport_fee,
+          calculated: transportFee,
+        },
+        arrears: {
+          selected: this.feeSubmission.selected_fees.arrears,
+          amount: this.feeSubmission.arrears,
+          calculated: arrears,
+        },
+        fine: {
+          selected: this.feeSubmission.selected_fees.fine,
+          amount: this.feeSubmission.fine,
+          calculated: fine,
+        },
+        annualFee: {
+          selected: this.feeSubmission.selected_fees.annual_fee,
+          amount: this.feeSubmission.annual_fee,
+          calculated: annualFee,
+        },
+        total,
+      });
+
+      return total;
     },
     remainingBalance() {
       const totalFee = this.totalFee;
@@ -2127,6 +3409,76 @@ export default {
     today() {
       return new Date().toISOString().substr(0, 10);
     },
+    selectedFeesCount() {
+      // Only count fees that are selected AND have amounts greater than 0
+      let count = 0;
+      if (
+        this.feeSubmission.selected_fees.admission_fee &&
+        this.feeSubmission.admission_fee > 0
+      )
+        count++;
+      if (
+        this.feeSubmission.selected_fees.monthly_fee &&
+        this.feeSubmission.monthly_fee > 0
+      )
+        count++;
+      if (
+        this.feeSubmission.selected_fees.transport_fee &&
+        this.feeSubmission.transport_fee > 0
+      )
+        count++;
+      if (
+        this.feeSubmission.selected_fees.arrears &&
+        this.feeSubmission.arrears > 0
+      )
+        count++;
+      if (this.feeSubmission.selected_fees.fine && this.feeSubmission.fine > 0)
+        count++;
+      if (
+        this.feeSubmission.selected_fees.annual_fee &&
+        this.feeSubmission.annual_fee > 0
+      )
+        count++;
+
+      console.log("🔍 Selected fees count:", count);
+      return count;
+    },
+    totalSelectedAmount() {
+      // Only count fees that are selected AND have amounts greater than 0
+      const admissionFee =
+        this.feeSubmission.selected_fees.admission_fee &&
+        this.feeSubmission.admission_fee > 0
+          ? parseFloat(this.feeSubmission.admission_fee) || 0
+          : 0;
+      const monthlyFee =
+        this.feeSubmission.selected_fees.monthly_fee &&
+        this.feeSubmission.monthly_fee > 0
+          ? parseFloat(this.feeSubmission.monthly_fee) || 0
+          : 0;
+      const transportFee =
+        this.feeSubmission.selected_fees.transport_fee &&
+        this.feeSubmission.transport_fee > 0
+          ? parseFloat(this.feeSubmission.transport_fee) || 0
+          : 0;
+      const arrears =
+        this.feeSubmission.selected_fees.arrears &&
+        this.feeSubmission.arrears > 0
+          ? parseFloat(this.feeSubmission.arrears) || 0
+          : 0;
+      const fine =
+        this.feeSubmission.selected_fees.fine && this.feeSubmission.fine > 0
+          ? parseFloat(this.feeSubmission.fine) || 0
+          : 0;
+      const annualFee =
+        this.feeSubmission.selected_fees.annual_fee &&
+        this.feeSubmission.annual_fee > 0
+          ? parseFloat(this.feeSubmission.annual_fee) || 0
+          : 0;
+
+      return (
+        admissionFee + monthlyFee + transportFee + arrears + fine + annualFee
+      );
+    },
   },
   watch: {
     // Watch for changes in fee components and automatically update calculations
@@ -2134,6 +3486,9 @@ export default {
       this.calculateTotalFee();
     },
     "feeSubmission.monthly_fee"() {
+      this.calculateTotalFee();
+    },
+    "feeSubmission.transport_fee"() {
       this.calculateTotalFee();
     },
     "feeSubmission.arrears"() {
@@ -2148,6 +3503,25 @@ export default {
     "feeSubmission.amount_paid"() {
       this.calculateRemainingBalance();
     },
+    // Watch for changes in fee selections
+    "feeSubmission.selected_fees.admission_fee"() {
+      this.calculateTotalFee();
+    },
+    "feeSubmission.selected_fees.monthly_fee"() {
+      this.calculateTotalFee();
+    },
+    "feeSubmission.selected_fees.transport_fee"() {
+      this.calculateTotalFee();
+    },
+    "feeSubmission.selected_fees.arrears"() {
+      this.calculateTotalFee();
+    },
+    "feeSubmission.selected_fees.fine"() {
+      this.calculateTotalFee();
+    },
+    "feeSubmission.selected_fees.annual_fee"() {
+      this.calculateTotalFee();
+    },
   },
   async mounted() {
     await this.loadFees();
@@ -2155,14 +3529,26 @@ export default {
     await this.loadPendingFees();
     await this.loadFeeHistory();
     this.feeForm.payment_date = this.today;
+
+    // Add click outside listener to close search results
+    document.addEventListener("click", this.handleClickOutside);
+  },
+
+  beforeDestroy() {
+    // Remove click outside listener
+    document.removeEventListener("click", this.handleClickOutside);
   },
   methods: {
     async loadFees() {
       this.loading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const response = await axios.get("http://localhost:8081/api/fees", {
-          headers: { Authorization: user.token },
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+        const response = await axios.get("/api/fees", {
+          headers: headers,
         });
         this.fees = response.data;
       } catch (error) {
@@ -2174,12 +3560,16 @@ export default {
 
     async loadStudents() {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const response = await axios.get("http://localhost:8081/api/students", {
-          headers: { Authorization: user.token },
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+
+        const response = await axios.get("/api/students", {
+          headers: headers,
         });
         this.students = response.data;
-        console.log("Students loaded:", this.students.length, this.students);
       } catch (error) {
         console.error("Error loading students:", error);
       }
@@ -2187,14 +3577,17 @@ export default {
 
     async loadPendingFees() {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const response = await axios.get(
-          "http://localhost:8081/api/fees/pending",
-          {
-            headers: { Authorization: user.token },
-          }
-        );
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+
+        const response = await axios.get("/api/fees/pending", {
+          headers: headers,
+        });
         this.pendingFees = response.data;
+        console.log("📊 Pending fees data received:", this.pendingFees);
       } catch (error) {
         console.error("Error loading pending fees:", error);
       }
@@ -2202,32 +3595,68 @@ export default {
 
     async loadFeeHistory() {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const response = await axios.get(
-          "http://localhost:8081/api/fees/history",
-          {
-            headers: { Authorization: user.token },
-          }
-        );
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+
+        const response = await axios.get("/api/fees/history", {
+          headers: headers,
+        });
         this.feeHistory = response.data;
       } catch (error) {
         console.error("Error loading fee history:", error);
       }
     },
 
-    async searchFees() {
-      if (!this.searchQuery.trim()) {
-        await this.loadFees();
-        return;
+    stableSearch() {
+      // Store the current search query
+      const currentQuery = this.searchQuery;
+      console.log("🔍 Search triggered with query:", currentQuery);
+
+      // Clear previous timeout
+      if (this.searchTimeout) {
+        clearTimeout(this.searchTimeout);
       }
 
+      // Set a new timeout to debounce the search
+      this.searchTimeout = setTimeout(() => {
+        // Only search if there's actually a query
+        if (!currentQuery || currentQuery.trim() === "") {
+          console.log("🔍 Empty query, loading all fees");
+          this.loadFees();
+          return;
+        }
+
+        console.log("🔍 Performing search with query:", currentQuery);
+        // Perform search with the stored query
+        this.performSearchWithQuery(currentQuery);
+      }, 500); // Wait 500ms after user stops typing
+    },
+
+    performSearch() {
+      // Immediate search on Enter key
+      const currentQuery = this.searchQuery;
+      if (currentQuery && currentQuery.trim() !== "") {
+        console.log("🔍 Performing immediate search with query:", currentQuery);
+        this.performSearchWithQuery(currentQuery);
+      }
+    },
+
+    async performSearchWithQuery(query) {
       this.loading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+
         const response = await axios.get(
-          `http://localhost:8081/api/fees/search?query=${this.searchQuery}`,
+          `/api/fees/search?query=${encodeURIComponent(query)}`,
           {
-            headers: { Authorization: user.token },
+            headers: headers,
           }
         );
         this.fees = response.data;
@@ -2280,12 +3709,12 @@ export default {
 
     async findStudentByAdmissionNumber() {
       // Clear previous timeout
-      if (this.searchTimeout) {
-        clearTimeout(this.searchTimeout);
+      if (this.searchTimeoutDialog) {
+        clearTimeout(this.searchTimeoutDialog);
       }
 
       // Set a new timeout to debounce the search
-      this.searchTimeout = setTimeout(async () => {
+      this.searchTimeoutDialog = setTimeout(async () => {
         if (
           !this.feeSubmission.admission_number ||
           this.feeSubmission.admission_number.length < 3
@@ -2297,31 +3726,44 @@ export default {
         }
 
         try {
-          const user = JSON.parse(localStorage.getItem("user"));
+          const authData = getAuthData();
+          const headers =
+            authData && authData.token
+              ? { Authorization: `Bearer ${authData.token}` }
+              : {};
           const response = await axios.get(
-            `http://localhost:8081/api/students/admission/${this.feeSubmission.admission_number}`,
+            `/api/students/admission/${this.feeSubmission.admission_number}`,
             {
-              headers: { Authorization: user.token },
+              headers: headers,
             }
           );
 
           if (response.data) {
             const student = response.data;
+            if (!student || !student.id) {
+              console.error("Invalid student data received:", student);
+              this.feeSubmission.student_id = null;
+              this.selectedStudentInfo = null;
+              this.resetFeeSubmission();
+              return;
+            }
+
+            console.log("🔍 Student data received:", student);
+            console.log(
+              "🔍 Admission fee amount:",
+              student.admission_fee_amount
+            );
+            console.log("🔍 Is admission paid:", student.is_admission_paid);
+
             this.feeSubmission.student_id = student.id;
             this.selectedStudentInfo = student;
 
-            // Auto-populate monthly fee
-            this.feeSubmission.monthly_fee = Number(student.monthly_fee) || 0;
-
-            // Auto-calculate arrears from student's remaining balance
-            this.feeSubmission.arrears = Number(student.arrears_amount) || 0;
-
-            // Reset fine and annual fee
-            this.feeSubmission.fine = 0;
-            this.feeSubmission.annual_fee = 0;
-
-            // Reset amount paid
-            this.feeSubmission.amount_paid = 0;
+            // Load detailed fee breakdown for this student
+            try {
+              await this.loadStudentFeeBreakdown(student.id);
+            } catch (error) {
+              console.error("Error loading student fee breakdown:", error);
+            }
 
             this.calculateTotalFee();
           } else {
@@ -2355,11 +3797,15 @@ export default {
         }
 
         try {
-          const user = JSON.parse(localStorage.getItem("user"));
+          const authData = getAuthData();
+          const headers =
+            authData && authData.token
+              ? { Authorization: `Bearer ${authData.token}` }
+              : {};
           const response = await axios.get(
-            `http://localhost:8081/api/students/admission/${this.feeForm.admission_number}`,
+            `/api/students/admission/${this.feeForm.admission_number}`,
             {
-              headers: { Authorization: user.token },
+              headers: headers,
             }
           );
 
@@ -2386,12 +3832,543 @@ export default {
       this.$forceUpdate();
     },
 
+    // Helper methods for fee component hints
+    getAdmissionFeeHint() {
+      if (!this.studentFeeBreakdown) return "One-time payment at admission";
+      const fee = this.studentFeeBreakdown.admission_fee;
+      if (fee.is_paid) return "✅ Admission fee paid";
+      if (fee.remaining > 0)
+        return `Remaining: ₨${fee.remaining} (Expected: ₨${fee.expected})`;
+      return "One-time payment at admission";
+    },
+
+    // Helper method to show if fee will be submitted
+    getFeeSubmissionStatus(feeType) {
+      const isSelected = this.feeSubmission.selected_fees[feeType];
+      const amount = this.feeSubmission[feeType];
+      const willBeSubmitted = isSelected && amount > 0;
+
+      if (willBeSubmitted) {
+        return "✅ Will be submitted";
+      } else if (isSelected && amount === 0) {
+        return "⚠️ Selected but amount is 0";
+      } else if (!isSelected && amount > 0) {
+        return "❌ Not selected (will not be submitted)";
+      } else {
+        return "Not selected";
+      }
+    },
+
+    getMonthlyFeeHint() {
+      if (!this.studentFeeBreakdown) return "";
+      const fee = this.studentFeeBreakdown.monthly_fee;
+      if (fee.is_paid) return "✅ Monthly fee paid";
+      if (fee.remaining > 0)
+        return `Remaining: ₨${fee.remaining} (Expected: ₨${fee.expected})`;
+      return "";
+    },
+
+    getTransportFeeHint() {
+      if (!this.studentFeeBreakdown) return "Transportation service fee";
+      const fee = this.studentFeeBreakdown.transport_fee;
+      if (fee.is_paid) return "✅ Transport fee paid";
+      if (fee.remaining > 0)
+        return `⏳ Pending: ₨${fee.remaining} (Expected: ₨${fee.expected})`;
+      return "Transportation service fee";
+    },
+
+    getFineHint() {
+      if (!this.studentFeeBreakdown) return "";
+      const fee = this.studentFeeBreakdown.fine;
+      if (fee.is_paid) return "✅ Fine paid";
+      if (fee.remaining > 0)
+        return `Remaining: ₨${fee.remaining} (Expected: ₨${fee.expected})`;
+      return "";
+    },
+
+    getAnnualFeeHint() {
+      if (!this.studentFeeBreakdown) return "";
+      const fee = this.studentFeeBreakdown.annual_fee;
+      if (fee.is_paid) return "✅ Annual fee paid";
+      if (fee.remaining > 0)
+        return `Remaining: ₨${fee.remaining} (Expected: ₨${fee.expected})`;
+      return "";
+    },
+
+    getArrearsHint() {
+      if (!this.studentFeeBreakdown) {
+        return this.feeSubmission.arrears > 0
+          ? "Previous unpaid amount from earlier months"
+          : "No outstanding arrears";
+      }
+      const fee = this.studentFeeBreakdown.arrears;
+      if (fee.is_paid) return "✅ Arrears paid";
+      if (fee.remaining > 0)
+        return `Remaining: ₨${fee.remaining} (Expected: ₨${fee.expected})`;
+      return "No outstanding arrears";
+    },
+
+    // Helper methods for fee component icons and status
+    getAdmissionFeeIcon() {
+      if (!this.studentFeeBreakdown) return "mdi-school";
+      const fee = this.studentFeeBreakdown.admission_fee;
+      return fee.is_paid ? "mdi-check-circle" : "mdi-school";
+    },
+
+    getAdmissionFeeIconColor() {
+      if (!this.studentFeeBreakdown) return "info";
+      const fee = this.studentFeeBreakdown.admission_fee;
+      return fee.is_paid ? "success" : "info";
+    },
+
+    getAdmissionFeeStatus() {
+      if (!this.studentFeeBreakdown) return null;
+      const fee = this.studentFeeBreakdown.admission_fee;
+      if (fee.is_paid) return "PAID";
+      if (fee.remaining > 0) return "PENDING";
+      return null;
+    },
+
+    getAdmissionFeeStatusColor() {
+      if (!this.studentFeeBreakdown) return "primary";
+      const fee = this.studentFeeBreakdown.admission_fee;
+      return fee.is_paid ? "success" : "warning";
+    },
+
+    // Monthly Fee helpers
+    getMonthlyFeeIcon() {
+      if (!this.studentFeeBreakdown) return "mdi-calendar-month";
+      const fee = this.studentFeeBreakdown.monthly_fee;
+      return fee.is_paid ? "mdi-check-circle" : "mdi-calendar-month";
+    },
+
+    getMonthlyFeeIconColor() {
+      if (!this.studentFeeBreakdown) return "primary";
+      const fee = this.studentFeeBreakdown.monthly_fee;
+      return fee.is_paid ? "success" : "primary";
+    },
+
+    getMonthlyFeeStatus() {
+      if (!this.studentFeeBreakdown) return null;
+      const fee = this.studentFeeBreakdown.monthly_fee;
+      if (fee.is_paid) return "PAID";
+      if (fee.remaining > 0) return "PENDING";
+      return null;
+    },
+
+    getMonthlyFeeStatusColor() {
+      if (!this.studentFeeBreakdown) return "primary";
+      const fee = this.studentFeeBreakdown.monthly_fee;
+      return fee.is_paid ? "success" : "warning";
+    },
+
+    // Transport Fee helpers
+    getTransportFeeIcon() {
+      if (!this.studentFeeBreakdown) return "mdi-bus";
+      const fee = this.studentFeeBreakdown.transport_fee;
+      return fee.is_paid ? "mdi-check-circle" : "mdi-bus";
+    },
+
+    getTransportFeeIconColor() {
+      if (!this.studentFeeBreakdown) return "orange";
+      const fee = this.studentFeeBreakdown.transport_fee;
+      return fee.is_paid ? "success" : "orange";
+    },
+
+    getTransportFeeStatus() {
+      if (!this.studentFeeBreakdown) return null;
+      const fee = this.studentFeeBreakdown.transport_fee;
+      if (fee.is_paid) return "PAID";
+      if (fee.remaining > 0) return "PENDING";
+      if (fee.expected > 0) return "PENDING";
+      return null;
+    },
+
+    getTransportFeeStatusColor() {
+      if (!this.studentFeeBreakdown) return "orange";
+      const fee = this.studentFeeBreakdown.transport_fee;
+      return fee.is_paid ? "success" : "warning";
+    },
+
+    // Fine helpers
+    getFineIcon() {
+      if (!this.studentFeeBreakdown) return "mdi-alert-circle";
+      const fee = this.studentFeeBreakdown.fine;
+      return fee.is_paid ? "mdi-check-circle" : "mdi-alert-circle";
+    },
+
+    getFineIconColor() {
+      if (!this.studentFeeBreakdown) return "error";
+      const fee = this.studentFeeBreakdown.fine;
+      return fee.is_paid ? "success" : "error";
+    },
+
+    getFineStatus() {
+      if (!this.studentFeeBreakdown) return null;
+      const fee = this.studentFeeBreakdown.fine;
+      if (fee.is_paid) return "PAID";
+      if (fee.remaining > 0) return "PENDING";
+      return null;
+    },
+
+    getFineStatusColor() {
+      if (!this.studentFeeBreakdown) return "error";
+      const fee = this.studentFeeBreakdown.fine;
+      return fee.is_paid ? "success" : "warning";
+    },
+
+    // Annual Fee helpers
+    getAnnualFeeIcon() {
+      if (!this.studentFeeBreakdown) return "mdi-calendar-year";
+      const fee = this.studentFeeBreakdown.annual_fee;
+      return fee.is_paid ? "mdi-check-circle" : "mdi-calendar-year";
+    },
+
+    getAnnualFeeIconColor() {
+      if (!this.studentFeeBreakdown) return "success";
+      const fee = this.studentFeeBreakdown.annual_fee;
+      return fee.is_paid ? "success" : "success";
+    },
+
+    getAnnualFeeStatus() {
+      if (!this.studentFeeBreakdown) return null;
+      const fee = this.studentFeeBreakdown.annual_fee;
+      if (fee.is_paid) return "PAID";
+      if (fee.remaining > 0) return "PENDING";
+      return null;
+    },
+
+    getAnnualFeeStatusColor() {
+      if (!this.studentFeeBreakdown) return "success";
+      const fee = this.studentFeeBreakdown.annual_fee;
+      return fee.is_paid ? "success" : "warning";
+    },
+
+    // Arrears helpers
+    getArrearsIcon() {
+      if (!this.studentFeeBreakdown) return "mdi-clock-alert";
+      const fee = this.studentFeeBreakdown.arrears;
+      return fee.is_paid ? "mdi-check-circle" : "mdi-clock-alert";
+    },
+
+    getArrearsIconColor() {
+      if (!this.studentFeeBreakdown) return "warning";
+      const fee = this.studentFeeBreakdown.arrears;
+      return fee.is_paid ? "success" : "warning";
+    },
+
+    getArrearsStatus() {
+      if (!this.studentFeeBreakdown) return null;
+      const fee = this.studentFeeBreakdown.arrears;
+      if (fee.is_paid) return "PAID";
+      if (fee.remaining > 0) return "PENDING";
+      return null;
+    },
+
+    getArrearsStatusColor() {
+      if (!this.studentFeeBreakdown) return "warning";
+      const fee = this.studentFeeBreakdown.arrears;
+      return fee.is_paid ? "success" : "warning";
+    },
+
+    // Helper methods for getting remaining amounts
+    getAdmissionFeeRemaining() {
+      if (!this.studentFeeBreakdown) return 0;
+      return this.studentFeeBreakdown.admission_fee.remaining;
+    },
+
+    getMonthlyFeeRemaining() {
+      if (!this.studentFeeBreakdown) return 0;
+      return this.studentFeeBreakdown.monthly_fee.remaining;
+    },
+
+    getTransportFeeRemaining() {
+      if (!this.studentFeeBreakdown) return 0;
+      return this.studentFeeBreakdown.transport_fee.remaining;
+    },
+
+    getFineRemaining() {
+      if (!this.studentFeeBreakdown) return 0;
+      return this.studentFeeBreakdown.fine.remaining;
+    },
+
+    getAnnualFeeRemaining() {
+      if (!this.studentFeeBreakdown) return 0;
+      return this.studentFeeBreakdown.annual_fee.remaining;
+    },
+
+    getArrearsRemaining() {
+      if (!this.studentFeeBreakdown) return 0;
+      return this.studentFeeBreakdown.arrears.remaining;
+    },
+
+    // Auto-check checkboxes for zero values - but allow manual override
+    autoCheckZeroValueFees() {
+      // Only auto-check if user hasn't manually set them
+      // This allows users to manually control which fees to submit
+
+      // Check admission fee - suggest selection if it has a value greater than 0
+      if (this.feeSubmission.admission_fee > 0) {
+        console.log(
+          "🔍 Suggesting admission fee checkbox for amount:",
+          this.feeSubmission.admission_fee
+        );
+        // Don't force selection - let user decide
+      } else if (
+        this.feeSubmission.admission_fee === 0 &&
+        this.getAdmissionFeeRemaining() === 0
+      ) {
+        // Only auto-check zero values to avoid confusion
+        this.feeSubmission.selected_fees.admission_fee = true;
+      }
+
+      // Check monthly fee - suggest selection if it has a value greater than 0
+      if (this.feeSubmission.monthly_fee > 0) {
+        // Don't force selection - let user decide
+      } else if (
+        this.feeSubmission.monthly_fee === 0 &&
+        this.getMonthlyFeeRemaining() === 0
+      ) {
+        this.feeSubmission.selected_fees.monthly_fee = true;
+      }
+
+      // Check transport fee - suggest selection if it has a value greater than 0
+      if (this.feeSubmission.transport_fee > 0) {
+        // Don't force selection - let user decide
+      } else if (
+        this.feeSubmission.transport_fee === 0 &&
+        this.getTransportFeeRemaining() === 0
+      ) {
+        this.feeSubmission.selected_fees.transport_fee = true;
+      } else if (this.getTransportFeeRemaining() > 0) {
+        // Suggest selection for remaining transport fees
+        // Don't force selection - let user decide
+      }
+
+      // Check arrears - suggest selection if it has a value greater than 0
+      if (this.feeSubmission.arrears > 0) {
+        // Don't force selection - let user decide
+      } else if (
+        this.feeSubmission.arrears === 0 &&
+        this.getArrearsRemaining() === 0
+      ) {
+        this.feeSubmission.selected_fees.arrears = true;
+      }
+
+      // Check fine - suggest selection if it has a value greater than 0
+      if (this.feeSubmission.fine > 0) {
+        // Don't force selection - let user decide
+      } else if (
+        this.feeSubmission.fine === 0 &&
+        this.getFineRemaining() === 0
+      ) {
+        this.feeSubmission.selected_fees.fine = true;
+      }
+
+      // Check annual fee - suggest selection if it has a value greater than 0
+      if (this.feeSubmission.annual_fee > 0) {
+        // Don't force selection - let user decide
+      } else if (
+        this.feeSubmission.annual_fee === 0 &&
+        this.getAnnualFeeRemaining() === 0
+      ) {
+        this.feeSubmission.selected_fees.annual_fee = true;
+      }
+    },
+
+    // Load fee breakdown by student ID (for manual search)
+    async loadStudentFeeBreakdown(studentId) {
+      if (!studentId) {
+        console.error("Invalid student ID passed to loadStudentFeeBreakdown");
+        this.studentFeeBreakdown = null;
+        return;
+      }
+
+      try {
+        console.log("🔍 Loading fee breakdown for student ID:", studentId);
+
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+
+        // Get the latest fee slip for this student
+        const slipResponse = await axios.get(
+          `/api/fee-slips/student/${studentId}`,
+          {
+            headers: headers,
+          }
+        );
+
+        if (!slipResponse.data || slipResponse.data.length === 0) {
+          console.log("No fee slips found for student:", studentId);
+          this.studentFeeBreakdown = null;
+          return;
+        }
+
+        // Get the latest fee slip
+        const latestSlip = slipResponse.data[0];
+        if (!latestSlip || !latestSlip.slip_id) {
+          console.error("Invalid slip data:", latestSlip);
+          this.studentFeeBreakdown = null;
+          return;
+        }
+
+        // Use the fee breakdown API with the slip ID
+        const response = await axios.get(
+          `/api/fee-slips/fee-breakdown/${latestSlip.slip_id}`,
+          {
+            headers: headers,
+          }
+        );
+
+        if (!response.data) {
+          console.error("No fee breakdown data received");
+          this.studentFeeBreakdown = null;
+          return;
+        }
+
+        console.log("🔍 Fee Breakdown Response:", response.data);
+
+        const { student_info, fee_breakdown, payment_summary } = response.data;
+
+        if (!student_info || !fee_breakdown || !payment_summary) {
+          console.error(
+            "Invalid or incomplete fee breakdown data:",
+            response.data
+          );
+          this.studentFeeBreakdown = null;
+          this.paymentSummary = null;
+          return;
+        }
+
+        // Store fee breakdown for display
+        this.studentFeeBreakdown = fee_breakdown;
+        this.paymentSummary = payment_summary;
+
+        console.log(
+          "🔍 Updated studentFeeBreakdown:",
+          this.studentFeeBreakdown
+        );
+        console.log("🔍 Updated paymentSummary:", this.paymentSummary);
+
+        // Reset all fee components to blank first
+        this.feeSubmission.admission_fee = 0;
+        this.feeSubmission.monthly_fee = 0;
+        this.feeSubmission.transport_fee = 0;
+        this.feeSubmission.fine = 0;
+        this.feeSubmission.annual_fee = 0;
+        this.feeSubmission.arrears = 0;
+        this.feeSubmission.amount_paid = 0;
+
+        // Reset selected fees based on remaining amounts
+        this.feeSubmission.selected_fees.admission_fee = false;
+        this.feeSubmission.selected_fees.monthly_fee = false;
+        this.feeSubmission.selected_fees.transport_fee = false;
+        this.feeSubmission.selected_fees.arrears = false;
+        this.feeSubmission.selected_fees.fine = false;
+        this.feeSubmission.selected_fees.annual_fee = false;
+
+        // Set fee components based on detailed breakdown
+        if (payment_summary.is_fully_paid) {
+          // Student has no dues - all fields remain blank
+          console.log("🔍 Student has no dues - all fields blank");
+          this.$toast.success(
+            "Student has no dues! All fee components are blank for admin input."
+          );
+        } else {
+          // Student has outstanding amounts - populate fields with remaining amounts
+          console.log("🔍 Student has outstanding amounts:", payment_summary);
+
+          // Set remaining amounts for each fee type
+          this.feeSubmission.admission_fee =
+            fee_breakdown.admission_fee.remaining;
+          this.feeSubmission.monthly_fee = fee_breakdown.monthly_fee.remaining;
+          this.feeSubmission.transport_fee =
+            fee_breakdown.transport_fee.remaining;
+          this.feeSubmission.arrears = fee_breakdown.arrears.remaining;
+          this.feeSubmission.fine = fee_breakdown.fine.remaining;
+          this.feeSubmission.annual_fee = fee_breakdown.annual_fee.remaining;
+
+          // Log the updated amounts for debugging
+          console.log("🔍 Updated fee amounts:", {
+            admission_fee: this.feeSubmission.admission_fee,
+            monthly_fee: this.feeSubmission.monthly_fee,
+            transport_fee: this.feeSubmission.transport_fee,
+            arrears: this.feeSubmission.arrears,
+            fine: this.feeSubmission.fine,
+            annual_fee: this.feeSubmission.annual_fee,
+          });
+
+          // Auto-check checkboxes for zero values
+          this.autoCheckZeroValueFees();
+
+          // Show comprehensive payment status message
+          let statusMessage = `Payment Status:\n`;
+          statusMessage += `• Total Expected: ₨${payment_summary.total_expected}\n`;
+          statusMessage += `• Total Paid: ₨${payment_summary.total_paid}\n`;
+          statusMessage += `• Total Remaining: ₨${payment_summary.total_remaining}\n`;
+          statusMessage += `• Status: ${
+            payment_summary.is_fully_paid ? "No Dues" : "Outstanding Amounts"
+          }`;
+
+          if (payment_summary.is_past_due_date) {
+            statusMessage += `\n• ⚠️ Past Due Date`;
+          }
+
+          this.$toast.info(statusMessage, {
+            timeout: 8000,
+            closeOnClick: true,
+          });
+        }
+
+        // Update the form to reflect current values
+        this.calculateTotalFee();
+        this.calculateRemainingBalance();
+
+        // Force template update to reflect new fee breakdown
+        this.$nextTick(() => {
+          this.$forceUpdate();
+        });
+
+        console.log("✅ Fee breakdown loaded successfully for student search");
+      } catch (error) {
+        console.error("❌ Error loading fee breakdown for student:", error);
+        console.error(
+          "❌ Error details:",
+          error.response?.data || error.message
+        );
+        this.studentFeeBreakdown = null;
+        this.paymentSummary = null;
+        this.feeSubmission.admission_fee = 0;
+        this.feeSubmission.monthly_fee = 0;
+        this.feeSubmission.transport_fee = 0;
+        this.feeSubmission.arrears = 0;
+        this.feeSubmission.fine = 0;
+        this.feeSubmission.annual_fee = 0;
+        this.feeSubmission.amount_paid = 0;
+        this.feeSubmission.selected_fees.admission_fee = false;
+        this.feeSubmission.selected_fees.monthly_fee = false;
+        this.feeSubmission.selected_fees.transport_fee = false;
+        this.feeSubmission.selected_fees.arrears = false;
+        this.feeSubmission.selected_fees.fine = false;
+        this.feeSubmission.selected_fees.annual_fee = false;
+        this.$toast.error("Error loading fee breakdown. Please try again.", {
+          timeout: 5000,
+          closeOnClick: true,
+        });
+        return;
+      }
+    },
+
     resetFeeSubmission() {
       this.feeSubmission = {
         student_id: null,
         admission_number: "",
         admission_fee: 0,
         monthly_fee: 0,
+        transport_fee: 0,
         arrears: 0,
         fine: 0,
         annual_fee: 0,
@@ -2401,119 +4378,69 @@ export default {
         month: new Date().getMonth() + 1,
         year: new Date().getFullYear(),
         remarks: "",
+        selected_fees: {
+          admission_fee: false,
+          monthly_fee: false,
+          transport_fee: false,
+          arrears: false,
+          fine: false,
+          annual_fee: false,
+        },
       };
       this.selectedStudentInfo = null;
+      this.studentSearchQuery = "";
+      this.studentSearchResults = [];
+      this.studentFeeBreakdown = null;
+      this.paymentSummary = null;
       if (this.$refs.feeSubmissionForm) {
         this.$refs.feeSubmissionForm.resetValidation();
       }
     },
 
-    // Barcode scanner methods
-    async startBarcodeScanner() {
-      try {
-        console.log("🔍 Starting barcode scanner...");
-        this.showBarcodeScanner = true;
-        this.scanningBarcode = true;
-
-        // Set a timeout to stop scanning after 30 seconds
-        this.scannerTimeout = setTimeout(() => {
-          if (this.scanningBarcode) {
-            console.log("⏰ Scanner timeout reached");
-            this.closeBarcodeScanner();
-            this.$toast.info(
-              "Scanner timeout. Please try again or use manual input."
-            );
-          }
-        }, 30000); // 30 seconds
-      } catch (error) {
-        console.error("Error accessing camera:", error);
-        this.$toast.error("Camera access denied. Please use manual input.");
-        this.scanningBarcode = false;
-      }
+    // Manual barcode input methods
+    openManualBarcodeInput() {
+      console.log("🔍 Opening manual barcode input...");
+      this.showManualBarcodeInput = true;
+      this.manualBarcodeValue = "";
+      this.processingManualBarcode = false;
     },
 
-    closeBarcodeScanner() {
-      this.showBarcodeScanner = false;
-      this.scanningBarcode = false;
-
-      // Clear timeouts
-      if (this.scannerTimeout) {
-        clearTimeout(this.scannerTimeout);
-        this.scannerTimeout = null;
-      }
-
-      if (this.patternDetectionTimeout) {
-        clearTimeout(this.patternDetectionTimeout);
-        this.patternDetectionTimeout = null;
-      }
-
-      // Stop ZXing reader if it's running
-      if (this.barcodeReader) {
-        try {
-          this.barcodeReader.reset();
-        } catch (error) {
-          console.error("Error stopping barcode reader:", error);
-        }
-        this.barcodeReader = null;
-      }
-
-      // Stop camera stream
-      if (this.barcodeScannerStream) {
-        this.barcodeScannerStream.getTracks().forEach((track) => track.stop());
-        this.barcodeScannerStream = null;
-      }
+    closeManualBarcodeInput() {
+      this.showManualBarcodeInput = false;
+      this.manualBarcodeValue = "";
+      this.processingManualBarcode = false;
     },
 
-    async startBarcodeDetection() {
+    async processManualBarcode() {
+      if (!this.manualBarcodeValue.trim()) {
+        this.$toast.error("Please enter a barcode");
+        return;
+      }
+
+      this.processingManualBarcode = true;
       try {
-        console.log("🔍 Starting barcode detection...");
+        console.log("🔍 Processing manual barcode:", this.manualBarcodeValue);
 
-        // Import ZXing library
-        const { BrowserMultiFormatReader } = await import("@zxing/library");
+        // Clean the barcode
+        const cleanBarcode = this.manualBarcodeValue.trim();
 
-        // First try to get camera access
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-        });
+        // Show the entered barcode to the user
+        this.$toast.info(`Processing barcode: ${cleanBarcode}`);
 
-        this.barcodeScannerStream = stream;
+        // Try to fetch fee slip data
+        await this.loadFeeSlipData(cleanBarcode);
 
-        // Set up video element
-        const video = this.$refs.barcodeVideo;
-        video.srcObject = stream;
-        video.play();
+        // Close the dialog
+        this.closeManualBarcodeInput();
 
-        // Wait for video to be ready
-        await new Promise((resolve) => {
-          video.addEventListener("loadedmetadata", resolve, { once: true });
-        });
-
-        console.log("✅ Camera access granted, video ready");
-        this.$toast.success("Camera ready! Point at barcode to scan.");
-
-        // Initialize ZXing reader
-        this.barcodeReader = new BrowserMultiFormatReader();
-
-        // Start continuous scanning
-        this.barcodeReader.decodeFromVideoDevice(null, video, (result, err) => {
-          if (result) {
-            console.log("🔍 Barcode detected:", result.getText());
-            this.processScannedBarcode(result.getText());
-            this.closeBarcodeScanner();
-          }
-          if (err && !(err instanceof Error)) {
-            // This is expected - no barcode found in frame
-            console.log("Scanning...");
-          }
-        });
+        console.log("✅ Manual barcode processing completed successfully");
       } catch (error) {
-        console.error("Error accessing camera:", error);
-        this.$toast.error("Camera access denied. Using manual input.");
-        this.closeBarcodeScanner();
+        console.error("❌ Error processing manual barcode:", error);
+        this.$toast.error(
+          `Barcode "${this.manualBarcodeValue}" not found. Please check the barcode and try again.`
+        );
+      } finally {
+        this.processingManualBarcode = false;
       }
     },
 
@@ -2560,107 +4487,93 @@ export default {
 
     async loadFeeSlipData(barcode) {
       try {
-        console.log("🔍 Loading fee slip data for barcode:", barcode);
+        console.log("🔍 Loading detailed fee breakdown for barcode:", barcode);
 
-        const user = JSON.parse(localStorage.getItem("user"));
-        console.log("🔍 User token:", user ? "Present" : "Missing");
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
+        // Use the new detailed fee breakdown API
         const response = await axios.get(
-          `http://localhost:8081/api/fee-slips/barcode/${barcode}`,
+          `/api/fee-slips/fee-breakdown/${barcode}`,
           {
-            headers: { Authorization: user.token },
+            headers: headers,
           }
         );
 
-        console.log("🔍 API Response:", response.data);
+        console.log("🔍 Detailed Fee Breakdown Response:", response.data);
 
-        // Handle both old and new response structures
-        let feeSlip, paymentStatus, arrearsInfo;
+        const { student_info, fee_breakdown, payment_summary } = response.data;
 
-        if (response.data.dynamic_fee_slip) {
-          // New dynamic structure
-          feeSlip = response.data.dynamic_fee_slip;
-          paymentStatus = response.data.payment_status;
-          arrearsInfo = response.data.arrears_info || {};
-          console.log("🔍 Using dynamic fee slip data");
-        } else {
-          // Old structure
-          feeSlip = response.data.feeSlip;
-          paymentStatus = response.data.payment_status;
-          arrearsInfo = response.data.arrears_info;
+        if (!student_info) {
+          throw new Error("Student information not found");
         }
 
-        console.log("🔍 Received fee slip data:", feeSlip);
-        console.log("🔍 Received payment status:", paymentStatus);
-        console.log("🔍 Received arrears info:", arrearsInfo);
-
-        if (!feeSlip) {
-          throw new Error("Fee slip not found");
-        }
-
-        // Update form with fee slip data
-        this.feeSubmission.student_id = feeSlip.student_id;
-        this.feeSubmission.admission_number = feeSlip.admission_number;
+        // Update form with student data
+        this.feeSubmission.student_id = student_info.id;
+        this.feeSubmission.admission_number = student_info.admission_number;
 
         // Set student info for display
         this.selectedStudentInfo = {
-          id: feeSlip.student_id,
-          name: feeSlip.student_name,
-          admission_number: feeSlip.admission_number,
-          class_name: feeSlip.class_name,
-          father_name: feeSlip.father_name,
-          photo: feeSlip.photo || null, // Include student photo if available
+          id: student_info.id,
+          name: student_info.name,
+          admission_number: student_info.admission_number,
+          class_name: student_info.class_name,
+          father_name: student_info.father_name,
+          photo: student_info.photo || null,
         };
 
-        // Store arrears information for display
-        this.studentArrearsInfo = arrearsInfo;
+        // Store fee breakdown for display
+        this.studentFeeBreakdown = fee_breakdown;
+        this.paymentSummary = payment_summary;
 
         // Reset all fee components to blank first
         this.feeSubmission.admission_fee = 0;
         this.feeSubmission.monthly_fee = 0;
+        this.feeSubmission.transport_fee = 0;
         this.feeSubmission.fine = 0;
         this.feeSubmission.annual_fee = 0;
         this.feeSubmission.arrears = 0;
         this.feeSubmission.amount_paid = 0;
 
-        // Set fee components based on payment status
-        if (paymentStatus.is_fully_paid) {
+        // Set fee components based on detailed breakdown
+        if (payment_summary.is_fully_paid) {
           // Student has no dues - all fields remain blank
           console.log("🔍 Student has no dues - all fields blank");
           this.$toast.success(
             "Student has no dues! All fee components are blank for admin input."
           );
         } else {
-          // Student has outstanding amounts - populate fields if data exists
+          // Student has outstanding amounts - populate fields with remaining amounts
+          console.log("🔍 Student has outstanding amounts:", payment_summary);
 
-          // Check for unpaid admission fee
-          if (feeSlip.admission_fee && feeSlip.admission_fee > 0) {
-            this.feeSubmission.admission_fee = feeSlip.admission_fee;
-          }
+          // Set remaining amounts for each fee type
+          this.feeSubmission.admission_fee =
+            fee_breakdown.admission_fee.remaining;
+          this.feeSubmission.monthly_fee = fee_breakdown.monthly_fee.remaining;
+          this.feeSubmission.transport_fee =
+            fee_breakdown.transport_fee.remaining;
+          this.feeSubmission.arrears = fee_breakdown.arrears.remaining;
+          this.feeSubmission.fine = fee_breakdown.fine.remaining;
+          this.feeSubmission.annual_fee = fee_breakdown.annual_fee.remaining;
 
-          if (feeSlip.monthly_fee && feeSlip.monthly_fee > 0) {
-            this.feeSubmission.monthly_fee = feeSlip.monthly_fee;
-          }
-
-          if (feeSlip.fine_amount && feeSlip.fine_amount > 0) {
-            this.feeSubmission.fine = feeSlip.fine_amount;
-          }
-
-          if (
-            paymentStatus.remaining_balance &&
-            paymentStatus.remaining_balance > 0
-          ) {
-            this.feeSubmission.arrears = paymentStatus.remaining_balance;
-          }
-
-          console.log("🔍 Student has outstanding amounts:", paymentStatus);
+          // Auto-check checkboxes for zero values
+          this.autoCheckZeroValueFees();
 
           // Show comprehensive payment status message
           let statusMessage = `Payment Status:\n`;
-          statusMessage += `• Total Fee: ₨${paymentStatus.total_fee}\n`;
-          statusMessage += `• Amount Paid: ₨${paymentStatus.amount_paid}\n`;
-          statusMessage += `• Remaining: ₨${paymentStatus.remaining_balance}\n`;
-          statusMessage += `• Status: ${paymentStatus.payment_message}`;
+          statusMessage += `• Total Expected: ₨${payment_summary.total_expected}\n`;
+          statusMessage += `• Total Paid: ₨${payment_summary.total_paid}\n`;
+          statusMessage += `• Total Remaining: ₨${payment_summary.total_remaining}\n`;
+          statusMessage += `• Status: ${
+            payment_summary.is_fully_paid ? "No Dues" : "Outstanding Amounts"
+          }`;
+
+          if (payment_summary.is_past_due_date) {
+            statusMessage += `\n• ⚠️ Past Due Date`;
+          }
 
           this.$toast.info(statusMessage, {
             timeout: 8000,
@@ -2672,9 +4585,14 @@ export default {
         this.calculateTotalFee();
         this.calculateRemainingBalance();
 
-        console.log("✅ Fee slip data loaded successfully");
+        // Force template update to reflect new fee breakdown
+        this.$nextTick(() => {
+          this.$forceUpdate();
+        });
+
+        console.log("✅ Detailed fee breakdown loaded successfully");
       } catch (error) {
-        console.error("❌ Error loading fee slip data:", error);
+        console.error("❌ Error loading detailed fee breakdown:", error);
         console.error(
           "❌ Error details:",
           error.response?.data || error.message
@@ -2703,16 +4621,873 @@ export default {
       this.showBarcodeScanner = true;
       this.scanningBarcode = true;
 
+      // Add a small delay to ensure the dialog is rendered
+      this.$nextTick(() => {
+        try {
+          // Start barcode detection
+          this.startBarcodeDetection();
+        } catch (error) {
+          console.error("Error starting barcode scanner:", error);
+          this.$toast.error(
+            "Error starting barcode scanner. Please try manual input."
+          );
+          this.scanningBarcode = false;
+        }
+      });
+    },
+
+    // Fallback method if Quagga fails
+    fallbackBarcodeInput() {
+      this.$toast.info("Camera scanner not available. Using manual input.");
+      this.manualBarcodeInput();
+    },
+
+    // Removed old printReceipt method - replaced with new implementation
+
+    oldGenerateReceiptHTML() {
+      if (!this.receiptData) return "";
+
+      const copies = ["PARENT COPY", "SCHOOL COPY"];
+      const data = {
+        student_name: this.receiptData.student_name,
+        admission_number: this.receiptData.admission_number,
+        father_name: this.receiptData.father_name,
+        month: this.receiptData.month,
+        due_date: this.receiptData.due_date,
+        total_amount: this.receiptData.total_amount,
+        fees: [
+          {
+            description: "Admission Fee",
+            amount: this.receiptData.admission_fee || 0,
+            total_amount: this.receiptData.total_admission_fee || 0,
+            status: this.getFeeStatus(
+              this.receiptData.admission_fee || 0,
+              this.receiptData.total_admission_fee || 0
+            ),
+          },
+          {
+            description: "Monthly Fee",
+            amount: this.receiptData.monthly_fee || 0,
+            total_amount: this.receiptData.total_monthly_fee || 0,
+            status: this.getFeeStatus(
+              this.receiptData.monthly_fee || 0,
+              this.receiptData.total_monthly_fee || 0
+            ),
+          },
+          {
+            description: "Transport Fee",
+            amount: this.receiptData.transport_fee || 0,
+            total_amount: this.receiptData.total_transport_fee || 0,
+            status: this.getFeeStatus(
+              this.receiptData.transport_fee || 0,
+              this.receiptData.total_transport_fee || 0
+            ),
+          },
+          {
+            description: "Annual Fund",
+            amount: this.receiptData.annual_fee || 0,
+            total_amount: this.receiptData.total_annual_fee || 0,
+            status: this.getFeeStatus(
+              this.receiptData.annual_fee || 0,
+              this.receiptData.total_annual_fee || 0
+            ),
+          },
+          {
+            description: "Arrears",
+            amount: this.receiptData.arrears || 0,
+            total_amount: this.receiptData.arrears || 0,
+            status: this.receiptData.arrears > 0 ? "Pending" : "Paid",
+          },
+        ],
+      };
+
+      return `
+        <div style="display: flex; justify-content: space-between; width: 100%; font-family: Arial, sans-serif;">
+          ${copies
+            .map(
+              (copyType) => `
+                              <div style="width: 48%; border: 1px solid #000; padding: 15px; margin: 5px;">
+                    <!-- Header -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                      <img src="/src/assets/the-educators-seeklogo.png" alt="Left Logo" style="height: 60px;">
+                      <div style="text-align: center; flex-grow: 1;">
+                        <h2 style="margin: 0; font-size: 16px;">THE EDUCATORS</h2>
+                        <p style="margin: 5px 0; font-size: 12px;">A project of Beaconhouse School System</p>
+                        <p style="margin: 5px 0; font-size: 12px;">Kohat Road Campus</p>
+                        <p style="margin: 5px 0; font-size: 12px;">Session 2025-2026</p>
+                        <h3 style="margin: 10px 0; font-size: 14px;">MONTHLY FEE SLIP</h3>
+                      </div>
+                      <img src="/src/assets/the-educators-seeklogo.png" alt="Right Logo" style="height: 60px;">
+                    </div>
+
+                    <!-- Student Details -->
+                    <div style="margin-bottom: 15px; font-size: 12px;">
+                      <table style="width: 100%; border-collapse: collapse;">
+                        <tr>
+                          <td style="padding: 3px 0;"><strong>Student ID:</strong></td>
+                          <td>${data.admission_number}</td>
+                          <td><strong>Due Date:</strong></td>
+                          <td>${data.due_date}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 3px 0;"><strong>Name:</strong></td>
+                          <td>${data.student_name}</td>
+                          <td><strong>Fee Month:</strong></td>
+                          <td>${data.month}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding: 3px 0;"><strong>Father's Name:</strong></td>
+                          <td colspan="3">${data.father_name}</td>
+                        </tr>
+                      </table>
+                    </div>
+
+              <!-- Fee Details -->
+              <div style="margin-bottom: 15px;">
+                <h4 style="margin: 10px 0; font-size: 14px; font-weight: bold;">PARTICULARS & AMOUNT</h4>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                  ${data.fees
+                    .map(
+                      (fee) => `
+                    <tr>
+                      <td style="padding: 5px 0; font-size: 14px;">${fee.description}:</td>
+                      <td style="text-align: right; padding: 5px 0; font-size: 14px;">Rs${fee.amount}</td>
+                    </tr>
+                  `
+                    )
+                    .join("")}
+                  <tr>
+                    <td style="padding: 8px 0 0; font-weight: bold; font-size: 16px;">Grand Total:</td>
+                    <td style="text-align: right; padding: 8px 0 0; font-weight: bold; font-size: 16px;">Rs${
+                      data.total_amount
+                    }</td>
+                  </tr>
+                </table>
+              </div>
+
+                                  <!-- Barcode Section -->
+                    <div style="text-align: center; margin: 15px 0;">
+                      <svg class="barcode" id="barcode-${copyType
+                        .split(" ")[0]
+                        .toLowerCase()}"
+                           jsbarcode-value="${data.admission_number}"
+                           jsbarcode-format="code128"
+                           jsbarcode-width="2"
+                           jsbarcode-height="50"
+                           jsbarcode-fontSize="12">
+                      </svg>
+                      <p style="font-size: 10px; margin: 5px 0;">Scan this barcode for fee collection</p>
+                    </div>
+
+                    <!-- Footer -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-end; font-size: 11px;">
+                      <div>
+                        <p style="margin: 0;">All dues must be paid on or before the due date.</p>
+                        <p style="margin: 5px 0;"><strong>${copyType}</strong></p>
+                      </div>
+                      <div style="text-align: center;">
+                        <div style="border: 1px solid #000; width: 150px; height: 60px; margin-left: auto;">
+                          <p style="margin: 45px 0 0 0; font-size: 10px; text-align: center;">Signature & Stamp</p>
+                        </div>
+                      </div>
+                    </div>
+            </div>
+          `
+            )
+            .join("")}
+        </div>
+      `;
+      if (!this.receiptData) return "";
+
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Fee Receipt</title>
+          <style>
+            @media print {
+              body { margin: 0; }
+              .no-print { display: none; }
+            }
+
+            body {
+              font-family: 'Times New Roman', serif;
+              margin: 0;
+              padding: 20px;
+              background: #fff;
+              color: #000;
+            }
+
+            .receipt-container {
+              max-width: 800px;
+              margin: 0 auto;
+              border: 2px solid #000;
+              padding: 30px;
+              background: #fff;
+            }
+
+            .school-header {
+              text-align: center;
+              border-bottom: 3px solid #000;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+
+            .school-name {
+              font-size: 28px;
+              font-weight: bold;
+              margin-bottom: 5px;
+              text-transform: uppercase;
+            }
+
+            .school-address {
+              font-size: 14px;
+              margin-bottom: 10px;
+            }
+
+            .receipt-title {
+              font-size: 24px;
+              font-weight: bold;
+              text-transform: uppercase;
+              margin-bottom: 10px;
+            }
+
+            .receipt-number {
+              font-size: 16px;
+              font-weight: bold;
+              margin-bottom: 5px;
+            }
+
+            .receipt-date {
+              font-size: 14px;
+              margin-bottom: 20px;
+            }
+
+            .info-section {
+              margin-bottom: 25px;
+            }
+
+            .section-title {
+              font-size: 18px;
+              font-weight: bold;
+              border-bottom: 1px solid #000;
+              padding-bottom: 5px;
+              margin-bottom: 15px;
+              text-transform: uppercase;
+            }
+
+            .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 15px;
+            }
+
+            .info-item {
+              display: flex;
+              justify-content: space-between;
+              padding: 8px 0;
+              border-bottom: 1px dotted #ccc;
+            }
+
+            .label {
+              font-weight: bold;
+              min-width: 120px;
+            }
+
+            .value {
+              text-align: right;
+            }
+
+            .fee-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 20px 0;
+              border: 1px solid #000;
+            }
+
+            .fee-table th {
+              background-color: #f0f0f0;
+              border: 1px solid #000;
+              padding: 12px 8px;
+              text-align: center;
+              font-weight: bold;
+              font-size: 14px;
+            }
+
+            .fee-table td {
+              border: 1px solid #000;
+              padding: 10px 8px;
+              text-align: center;
+              font-size: 14px;
+            }
+
+            .fee-table th:first-child,
+            .fee-table td:first-child {
+              text-align: left;
+            }
+
+            .summary-section {
+              margin-top: 30px;
+              border-top: 2px solid #000;
+              padding-top: 20px;
+            }
+
+            .summary-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr 1fr;
+              gap: 20px;
+              margin: 20px 0;
+            }
+
+            .summary-card {
+              border: 2px solid #000;
+              padding: 15px;
+              text-align: center;
+              background: #f9f9f9;
+            }
+
+            .summary-title {
+              font-size: 14px;
+              font-weight: bold;
+              margin-bottom: 10px;
+              text-transform: uppercase;
+            }
+
+            .summary-amount {
+              font-size: 20px;
+              font-weight: bold;
+            }
+
+            .status-section {
+              text-align: center;
+              margin-top: 30px;
+              padding: 20px;
+              border: 2px solid #000;
+              background: #f0f0f0;
+            }
+
+            .status-text {
+              font-size: 18px;
+              font-weight: bold;
+              text-transform: uppercase;
+            }
+
+            .paid { color: #008000; }
+            .pending { color: #ff6600; }
+            .partial { color: #ff6600; }
+
+            .footer {
+              margin-top: 40px;
+              text-align: center;
+              font-size: 12px;
+              border-top: 1px solid #000;
+              padding-top: 20px;
+            }
+
+            .signature-section {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 50px;
+              margin-top: 40px;
+            }
+
+            .signature-box {
+              text-align: center;
+              border-top: 1px solid #000;
+              padding-top: 10px;
+              margin-top: 50px;
+            }
+
+            .signature-title {
+              font-size: 14px;
+              font-weight: bold;
+              margin-bottom: 40px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="receipt-container">
+            <div class="school-header">
+              <div class="school-name">SCHOOL NAME</div>
+              <div class="school-address">Kohat Road Peshawar</div>
+              
+              <div class="receipt-title">FEE RECEIPT</div>
+              <div class="receipt-number">Receipt No: ${
+                this.receiptData.receipt_number
+              }</div>
+              <div class="receipt-date">Date: ${this.formatDate(
+                this.receiptData.generated_at
+              )}</div>
+            </div>
+
+            <div class="info-section">
+              <div class="section-title">Student Information</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">Student Name:</span>
+                  <span class="value">${
+                    this.receiptData.student_info.name
+                  }</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Admission No:</span>
+                  <span class="value">${
+                    this.receiptData.student_info.admission_number
+                  }</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Father's Name:</span>
+                  <span class="value">${
+                    this.receiptData.student_info.father_name
+                  }</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Class:</span>
+                  <span class="value">${
+                    this.receiptData.student_info.class_name
+                  }</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="info-section">
+              <div class="section-title">Payment Details</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="label">Payment Date:</span>
+                  <span class="value">${this.formatDate(
+                    this.receiptData.payment_details.payment_date
+                  )}</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Payment Method:</span>
+                  <span class="value">${
+                    this.receiptData.payment_details.payment_method
+                  }</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Amount Paid:</span>
+                  <span class="value paid">₨${
+                    this.receiptData.payment_details.amount_paid
+                  }</span>
+                </div>
+                <div class="info-item">
+                  <span class="label">Fee Type:</span>
+                  <span class="value">${
+                    this.receiptData.payment_details.fee_type
+                  }</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="info-section">
+              <div class="section-title">Fee Breakdown</div>
+              <table class="fee-table">
+                <thead>
+                  <tr>
+                    <th>Fee Type</th>
+                    <th>Expected Amount</th>
+                    <th>Paid Amount</th>
+                    <th>Remaining Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${this.generateReceiptTableRows()}
+                </tbody>
+              </table>
+            </div>
+
+            <div class="summary-section">
+              <div class="summary-grid">
+                <div class="summary-card">
+                  <div class="summary-title">Total Expected</div>
+                  <div class="summary-amount">₨${
+                    this.receiptData.summary.total_expected
+                  }</div>
+                </div>
+                <div class="summary-card">
+                  <div class="summary-title paid">Total Paid</div>
+                  <div class="summary-amount paid">₨${
+                    this.receiptData.summary.total_paid
+                  }</div>
+                </div>
+                <div class="summary-card">
+                  <div class="summary-title pending">Total Remaining</div>
+                  <div class="summary-amount pending">₨${
+                    this.receiptData.summary.total_remaining
+                  }</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="status-section">
+              <div class="status-text ${this.getPaymentStatusColor(
+                this.receiptData.summary.payment_status
+              )}">
+                ${this.getPaymentStatusText(
+                  this.receiptData.summary.payment_status
+                )}
+              </div>
+            </div>
+
+            <div class="signature-section">
+              <div class="signature-box">
+                <div class="signature-title">Student/Parent Signature</div>
+              </div>
+              <div class="signature-box">
+                <div class="signature-title">Authorized Signature</div>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p>This is a computer generated receipt. No signature required.</p>
+              <p>Thank you for your payment!</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    },
+
+    generateReceiptTableRows() {
+      const rows = [];
+      const breakdown = this.receiptData.fee_breakdown;
+
+      if (breakdown.admission_fee.expected > 0) {
+        rows.push(`
+          <tr>
+            <td>Admission Fee</td>
+            <td>₨${breakdown.admission_fee.expected}</td>
+            <td class="paid">₨${breakdown.admission_fee.paid}</td>
+            <td class="pending">₨${breakdown.admission_fee.remaining}</td>
+            <td><strong>${breakdown.admission_fee.status}</strong></td>
+          </tr>
+        `);
+      }
+
+      if (breakdown.monthly_fee.expected > 0) {
+        rows.push(`
+          <tr>
+            <td>Monthly Fee</td>
+            <td>₨${breakdown.monthly_fee.expected}</td>
+            <td class="paid">₨${breakdown.monthly_fee.paid}</td>
+            <td class="pending">₨${breakdown.monthly_fee.remaining}</td>
+            <td><strong>${breakdown.monthly_fee.status}</strong></td>
+          </tr>
+        `);
+      }
+
+      if (breakdown.transport_fee.expected > 0) {
+        rows.push(`
+          <tr>
+            <td>Transport Fee</td>
+            <td>₨${breakdown.transport_fee.expected}</td>
+            <td class="paid">₨${breakdown.transport_fee.paid}</td>
+            <td class="pending">₨${breakdown.transport_fee.remaining}</td>
+            <td><strong>${breakdown.transport_fee.status}</strong></td>
+          </tr>
+        `);
+      }
+
+      if (breakdown.arrears.expected > 0) {
+        rows.push(`
+          <tr>
+            <td>Arrears</td>
+            <td>₨${breakdown.arrears.expected}</td>
+            <td class="paid">₨${breakdown.arrears.paid}</td>
+            <td class="pending">₨${breakdown.arrears.remaining}</td>
+            <td><strong>${breakdown.arrears.status}</strong></td>
+          </tr>
+        `);
+      }
+
+      if (breakdown.fine.expected > 0) {
+        rows.push(`
+          <tr>
+            <td>Fine</td>
+            <td>₨${breakdown.fine.expected}</td>
+            <td class="paid">₨${breakdown.fine.paid}</td>
+            <td class="pending">₨${breakdown.fine.remaining}</td>
+            <td><strong>${breakdown.fine.status}</strong></td>
+          </tr>
+        `);
+      }
+
+      if (breakdown.annual_fee.expected > 0) {
+        rows.push(`
+          <tr>
+            <td>Annual Fee</td>
+            <td>₨${breakdown.annual_fee.expected}</td>
+            <td class="paid">₨${breakdown.annual_fee.paid}</td>
+            <td class="pending">₨${breakdown.annual_fee.remaining}</td>
+            <td><strong>${breakdown.annual_fee.status}</strong></td>
+          </tr>
+        `);
+      }
+
+      return rows.join("");
+    },
+
+    getStatusColor(status) {
+      switch (status) {
+        case "PAID":
+          return "success";
+        case "PARTIAL":
+          return "warning";
+        case "PENDING":
+          return "error";
+        default:
+          return "grey";
+      }
+    },
+
+    getPaymentStatusColor(status) {
+      switch (status) {
+        case "FULLY_PAID":
+          return "success";
+        case "PARTIALLY_PAID":
+          return "warning";
+        case "UNPAID":
+          return "error";
+        default:
+          return "grey";
+      }
+    },
+
+    getPaymentStatusIcon(status) {
+      switch (status) {
+        case "FULLY_PAID":
+          return "mdi-check-circle";
+        case "PARTIALLY_PAID":
+          return "mdi-clock";
+        case "UNPAID":
+          return "mdi-alert-circle";
+        default:
+          return "mdi-help-circle";
+      }
+    },
+
+    getPaymentStatusText(status) {
+      switch (status) {
+        case "FULLY_PAID":
+          return "FULLY PAID";
+        case "PARTIALLY_PAID":
+          return "PARTIALLY PAID";
+        case "UNPAID":
+          return "UNPAID";
+        default:
+          return "UNKNOWN";
+      }
+    },
+
+    formatDate(dateString) {
+      if (!dateString) return "";
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    },
+
+    async startBarcodeDetection() {
       try {
-        // Start barcode detection
-        this.startBarcodeDetection();
+        this.cameraLoading = true;
+
+        // Start barcode detection with Quagga
+        this.startBarcodeScanning();
       } catch (error) {
         console.error("Error starting barcode scanner:", error);
         this.$toast.error(
-          "Error starting barcode scanner. Please try manual input."
+          "Unable to start barcode scanner. Please check permissions."
         );
-        this.scanningBarcode = false;
+        this.closeBarcodeScanner();
+      } finally {
+        this.cameraLoading = false;
       }
+    },
+
+    startBarcodeScanning() {
+      const video = this.$refs.videoElement;
+
+      if (!video) return;
+
+      // Import Quagga dynamically
+      import("quagga")
+        .then((Quagga) => {
+          Quagga.init(
+            {
+              inputStream: {
+                name: "Live",
+                type: "LiveStream",
+                target: video,
+                constraints: {
+                  width: { min: 640 },
+                  height: { min: 480 },
+                  facingMode: "environment",
+                },
+              },
+              decoder: {
+                readers: [
+                  "code_128_reader",
+                  "ean_reader",
+                  "ean_8_reader",
+                  "code_39_reader",
+                  "code_39_vin_reader",
+                  "codabar_reader",
+                  "upc_reader",
+                  "upc_e_reader",
+                  "i2of5_reader",
+                ],
+                debug: {
+                  showCanvas: true,
+                  showPatches: true,
+                  showFoundPatches: true,
+                  showSkeleton: true,
+                  showLabels: true,
+                  showPatchLabels: true,
+                  showRemainingPatchLabels: true,
+                  boxFromPatches: {
+                    showTransformed: true,
+                    showTransformedBox: true,
+                    showBB: true,
+                  },
+                },
+              },
+              locate: true,
+              frequency: 10,
+            },
+            (err) => {
+              if (err) {
+                console.error("Quagga initialization failed:", err);
+                this.$toast.error("Failed to initialize barcode scanner");
+                this.closeBarcodeScanner();
+                return;
+              }
+
+              console.log("Quagga initialized successfully");
+              Quagga.start();
+
+              // Listen for barcode detection
+              Quagga.onDetected((result) => {
+                try {
+                  const barcode = result.codeResult.code;
+                  console.log("🎯 Barcode detected:", barcode);
+                  console.log("📊 Barcode result:", result);
+
+                  // Validate barcode format (should start with FS)
+                  if (barcode && barcode.startsWith("FS")) {
+                    console.log("✅ Valid FS barcode detected");
+                    // Process the detected barcode
+                    this.processScannedBarcode(barcode);
+                    // Stop scanning after successful detection
+                    this.closeBarcodeScanner();
+                  } else {
+                    console.log("⚠️ Invalid barcode format:", barcode);
+                    this.$toast.warning(
+                      "Invalid barcode format. Please scan a valid fee slip barcode."
+                    );
+                  }
+                } catch (error) {
+                  console.error("Error processing detected barcode:", error);
+                  this.$toast.error(
+                    "Error processing barcode. Please try again."
+                  );
+                }
+              });
+
+              // Listen for processing
+              Quagga.onProcessed((result) => {
+                if (result && result.codeResult) {
+                  console.log("🔄 Processing barcode:", result.codeResult.code);
+                }
+              });
+            }
+          );
+        })
+        .catch((error) => {
+          console.error("Failed to load Quagga:", error);
+          this.$toast.error(
+            "Barcode scanner library not available. Try manual input."
+          );
+          this.closeBarcodeScanner();
+          // Fallback to manual input
+          this.fallbackBarcodeInput();
+        });
+    },
+
+    closeBarcodeScanner() {
+      this.showBarcodeScanner = false;
+      this.scanningBarcode = false;
+      this.cameraLoading = false;
+
+      // Stop Quagga if it's running
+      import("quagga")
+        .then((Quagga) => {
+          try {
+            Quagga.stop();
+          } catch (error) {
+            console.log("Quagga was not running");
+          }
+        })
+        .catch(() => {
+          console.log("Quagga not available");
+        });
+
+      // Stop video stream
+      if (this.stream) {
+        this.stream.getTracks().forEach((track) => track.stop());
+        this.stream = null;
+      }
+
+      // Clear detection interval
+      if (this.barcodeDetectionInterval) {
+        clearInterval(this.barcodeDetectionInterval);
+        this.barcodeDetectionInterval = null;
+      }
+    },
+
+    toggleCamera() {
+      this.cameraLoading = true;
+
+      // Stop current stream
+      if (this.stream) {
+        this.stream.getTracks().forEach((track) => track.stop());
+      }
+
+      // Restart with different camera
+      this.startBarcodeDetection();
+    },
+
+    // Test method to simulate barcode detection
+    testBarcodeDetection() {
+      const testBarcode = "FS0423EDU20250103"; // Example barcode
+      console.log("Testing barcode detection with:", testBarcode);
+      this.processScannedBarcode(testBarcode);
+      this.closeBarcodeScanner();
+    },
+
+    // Debug method to check scanner status
+    debugScanner() {
+      console.log("🔍 Scanner Debug Info:");
+      console.log("- showBarcodeScanner:", this.showBarcodeScanner);
+      console.log("- scanningBarcode:", this.scanningBarcode);
+      console.log("- cameraLoading:", this.cameraLoading);
+      console.log("- stream:", this.stream);
+      console.log("- videoElement:", this.$refs.videoElement);
+
+      // Test if Quagga is available
+      import("quagga")
+        .then((Quagga) => {
+          console.log("✅ Quagga is available");
+          console.log("Quagga version:", Quagga.version);
+        })
+        .catch((error) => {
+          console.error("❌ Quagga not available:", error);
+        });
     },
 
     async submitFeeSubmission() {
@@ -2720,57 +5495,242 @@ export default {
         return;
       }
 
+      // Check if any fees are selected AND have amounts greater than 0
+      const selectedFeesWithAmount =
+        (this.feeSubmission.selected_fees.admission_fee &&
+          this.feeSubmission.admission_fee > 0) ||
+        (this.feeSubmission.selected_fees.monthly_fee &&
+          this.feeSubmission.monthly_fee > 0) ||
+        (this.feeSubmission.selected_fees.transport_fee &&
+          this.feeSubmission.transport_fee > 0) ||
+        (this.feeSubmission.selected_fees.arrears &&
+          this.feeSubmission.arrears > 0) ||
+        (this.feeSubmission.selected_fees.fine &&
+          this.feeSubmission.fine > 0) ||
+        (this.feeSubmission.selected_fees.annual_fee &&
+          this.feeSubmission.annual_fee > 0);
+
+      if (!selectedFeesWithAmount) {
+        this.$toast.warning(
+          "Please select at least one fee component with an amount greater than 0 to submit. You can manually control which fees to submit by checking/unchecking the boxes."
+        );
+        return;
+      }
+
+      // Log which fees will be submitted
+      console.log("🔍 Fees that will be submitted:", {
+        admission_fee:
+          this.feeSubmission.selected_fees.admission_fee &&
+          this.feeSubmission.admission_fee > 0
+            ? this.feeSubmission.admission_fee
+            : "Not submitted",
+        monthly_fee:
+          this.feeSubmission.selected_fees.monthly_fee &&
+          this.feeSubmission.monthly_fee > 0
+            ? this.feeSubmission.monthly_fee
+            : "Not submitted",
+        transport_fee:
+          this.feeSubmission.selected_fees.transport_fee &&
+          this.feeSubmission.transport_fee > 0
+            ? this.feeSubmission.transport_fee
+            : "Not submitted",
+        arrears:
+          this.feeSubmission.selected_fees.arrears &&
+          this.feeSubmission.arrears > 0
+            ? this.feeSubmission.arrears
+            : "Not submitted",
+        fine:
+          this.feeSubmission.selected_fees.fine && this.feeSubmission.fine > 0
+            ? this.feeSubmission.fine
+            : "Not submitted",
+        annual_fee:
+          this.feeSubmission.selected_fees.annual_fee &&
+          this.feeSubmission.annual_fee > 0
+            ? this.feeSubmission.annual_fee
+            : "Not submitted",
+      });
+
       this.feeSubmissionLoading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
-        // Calculate the actual amount to be recorded
-        const actualAmount = this.feeSubmission.amount_paid;
-        const totalFee = this.totalFee;
-        const remainingBalance = this.remainingBalance;
+        // Submit each selected fee type separately
+        const submittedFees = [];
+        let totalSubmitted = 0;
 
-        // Prepare the fee data
-        const feeData = {
-          student_id: this.feeSubmission.student_id,
-          fee_type: "Monthly Fee",
-          amount: actualAmount,
-          payment_date: this.feeSubmission.payment_date,
-          payment_method: this.feeSubmission.payment_method,
-          month: this.feeSubmission.month,
-          year: this.feeSubmission.year,
-          remarks: this.feeSubmission.remarks,
-          // Additional fields for detailed tracking
-          monthly_fee: this.feeSubmission.monthly_fee,
-          fine_paid: this.feeSubmission.fine,
-          annual_fee_paid: this.feeSubmission.annual_fee,
-          total_fee: totalFee,
-          remaining_balance: remainingBalance,
-          // If there's remaining balance, it becomes new arrears
-          new_arrears: remainingBalance > 0 ? remainingBalance : 0,
-        };
+        // Submit Admission Fee
+        if (
+          this.feeSubmission.selected_fees.admission_fee &&
+          this.feeSubmission.admission_fee > 0
+        ) {
+          const admissionFeeData = {
+            student_id: this.feeSubmission.student_id,
+            fee_type: "Admission Fee",
+            amount: this.feeSubmission.admission_fee,
+            payment_date: this.feeSubmission.payment_date,
+            payment_method: this.feeSubmission.payment_method,
+            month: this.feeSubmission.month,
+            year: this.feeSubmission.year,
+            remarks: this.feeSubmission.remarks,
+          };
 
-        const response = await axios.post(
-          "http://localhost:8081/api/fees",
-          feeData,
-          {
-            headers: { Authorization: user.token },
+          const admissionResponse = await axios.post(
+            "/api/fees",
+            admissionFeeData,
+            { headers }
+          );
+          if (admissionResponse.status === 201) {
+            submittedFees.push("Admission Fee");
+            totalSubmitted += this.feeSubmission.admission_fee;
           }
-        );
+        }
 
-        if (response.status === 201) {
-          // Show success message with payment status
-          const responseData = response.data;
-          let successMessage = "Fee submitted successfully!";
+        // Submit Monthly Fee
+        if (
+          this.feeSubmission.selected_fees.monthly_fee &&
+          this.feeSubmission.monthly_fee > 0
+        ) {
+          const monthlyFeeData = {
+            student_id: this.feeSubmission.student_id,
+            fee_type: "Monthly Fee",
+            amount: this.feeSubmission.monthly_fee,
+            payment_date: this.feeSubmission.payment_date,
+            payment_method: this.feeSubmission.payment_method,
+            month: this.feeSubmission.month,
+            year: this.feeSubmission.year,
+            remarks: this.feeSubmission.remarks,
+          };
 
-          if (responseData.payment_message) {
-            successMessage += `\n${responseData.payment_message}`;
+          const monthlyResponse = await axios.post(
+            "/api/fees",
+            monthlyFeeData,
+            { headers }
+          );
+          if (monthlyResponse.status === 201) {
+            submittedFees.push("Monthly Fee");
+            totalSubmitted += this.feeSubmission.monthly_fee;
           }
+        }
 
-          if (responseData.remaining_balance > 0) {
-            this.$toast.warning(successMessage, { timeout: 5000 });
-          } else {
-            this.$toast.success(successMessage, { timeout: 5000 });
+        // Submit Transport Fee
+        if (
+          this.feeSubmission.selected_fees.transport_fee &&
+          this.feeSubmission.transport_fee > 0
+        ) {
+          const transportFeeData = {
+            student_id: this.feeSubmission.student_id,
+            fee_type: "Transport Fee",
+            amount: this.feeSubmission.transport_fee,
+            payment_date: this.feeSubmission.payment_date,
+            payment_method: this.feeSubmission.payment_method,
+            month: this.feeSubmission.month,
+            year: this.feeSubmission.year,
+            remarks: this.feeSubmission.remarks,
+          };
+
+          const transportResponse = await axios.post(
+            "/api/fees",
+            transportFeeData,
+            { headers }
+          );
+          if (transportResponse.status === 201) {
+            submittedFees.push("Transport Fee");
+            totalSubmitted += this.feeSubmission.transport_fee;
           }
+        }
+
+        // Submit Arrears
+        if (
+          this.feeSubmission.selected_fees.arrears &&
+          this.feeSubmission.arrears > 0
+        ) {
+          const arrearsData = {
+            student_id: this.feeSubmission.student_id,
+            fee_type: "Arrears",
+            amount: this.feeSubmission.arrears,
+            payment_date: this.feeSubmission.payment_date,
+            payment_method: this.feeSubmission.payment_method,
+            month: this.feeSubmission.month,
+            year: this.feeSubmission.year,
+            remarks: this.feeSubmission.remarks,
+          };
+
+          const arrearsResponse = await axios.post("/api/fees", arrearsData, {
+            headers,
+          });
+          if (arrearsResponse.status === 201) {
+            submittedFees.push("Arrears");
+            totalSubmitted += this.feeSubmission.arrears;
+          }
+        }
+
+        // Submit Fine
+        if (
+          this.feeSubmission.selected_fees.fine &&
+          this.feeSubmission.fine > 0
+        ) {
+          const fineData = {
+            student_id: this.feeSubmission.student_id,
+            fee_type: "Fine",
+            amount: this.feeSubmission.fine,
+            payment_date: this.feeSubmission.payment_date,
+            payment_method: this.feeSubmission.payment_method,
+            month: this.feeSubmission.month,
+            year: this.feeSubmission.year,
+            remarks: this.feeSubmission.remarks,
+          };
+
+          const fineResponse = await axios.post("/api/fees", fineData, {
+            headers,
+          });
+          if (fineResponse.status === 201) {
+            submittedFees.push("Fine");
+            totalSubmitted += this.feeSubmission.fine;
+          }
+        }
+
+        // Submit Annual Fee
+        if (
+          this.feeSubmission.selected_fees.annual_fee &&
+          this.feeSubmission.annual_fee > 0
+        ) {
+          const annualFeeData = {
+            student_id: this.feeSubmission.student_id,
+            fee_type: "Annual Fee",
+            amount: this.feeSubmission.annual_fee,
+            payment_date: this.feeSubmission.payment_date,
+            payment_method: this.feeSubmission.payment_method,
+            month: this.feeSubmission.month,
+            year: this.feeSubmission.year,
+            remarks: this.feeSubmission.remarks,
+          };
+
+          const annualResponse = await axios.post("/api/fees", annualFeeData, {
+            headers,
+          });
+          if (annualResponse.status === 201) {
+            submittedFees.push("Annual Fee");
+            totalSubmitted += this.feeSubmission.annual_fee;
+          }
+        }
+
+        // Show success message
+        if (submittedFees.length > 0) {
+          const successMessage = `Fee submitted successfully!\nSubmitted: ${submittedFees.join(
+            ", "
+          )}\nTotal Amount: ₨${totalSubmitted}`;
+          this.$toast.success(successMessage, { timeout: 5000 });
+
+          // Generate receipt for the submitted payment
+          console.log("🔍 About to generate receipt with:", {
+            totalSubmitted,
+            submittedFees,
+          });
+          await this.generateReceiptAfterPayment(totalSubmitted, submittedFees);
 
           // Reset form
           this.resetFeeSubmission();
@@ -2778,6 +5738,10 @@ export default {
           // Reload fees
           await this.loadFees();
           await this.loadPendingFees();
+        } else {
+          this.$toast.error(
+            "No fees were submitted. Please check your selections."
+          );
         }
       } catch (error) {
         console.error("Error submitting fee:", error);
@@ -2787,13 +5751,522 @@ export default {
       }
     },
 
+    async generateReceiptAfterPayment(totalSubmitted, submittedFees) {
+      try {
+        console.log("🔍 Generating receipt after payment:", {
+          totalSubmitted,
+          submittedFees,
+          studentId: this.feeSubmission.student_id,
+        });
+
+        // Get current student information
+        const authData = getAuthData();
+        const headers = authData?.token
+          ? { Authorization: `Bearer ${authData.token}` }
+          : {};
+
+        console.log(
+          "🔍 Step 1: Getting student info for ID:",
+          this.feeSubmission.student_id
+        );
+        // Fetch current student details
+        const studentResponse = await axios.get(
+          `/api/students/${this.feeSubmission.student_id}`,
+          { headers }
+        );
+        const student = studentResponse.data;
+        console.log("🔍 Step 1 ✅: Student data received:", student);
+
+        if (!student) {
+          throw new Error("Student information not found");
+        }
+
+        // Get current fee breakdown for the student using the existing fee slip endpoint
+        console.log("🔍 Step 2: Getting fee slips for student");
+        // First get the student's fee slips to find the latest one
+        const slipResponse = await axios.get(
+          `/api/fee-slips/student/${this.feeSubmission.student_id}`,
+          { headers }
+        );
+        console.log("🔍 Step 2: Fee slips response:", slipResponse.data);
+
+        if (!slipResponse.data || slipResponse.data.length === 0) {
+          throw new Error("No fee slips found for student");
+        }
+
+        const latestSlip = slipResponse.data[0];
+        console.log("🔍 Step 2: Latest slip:", latestSlip);
+        if (!latestSlip || !latestSlip.slip_id) {
+          throw new Error("Invalid slip data");
+        }
+
+        console.log(
+          "🔍 Step 3: Getting fee breakdown for slip_id:",
+          latestSlip.slip_id
+        );
+        // Get the fee breakdown using the existing endpoint
+        const feeBreakdownResponse = await axios.get(
+          `/api/fee-slips/fee-breakdown/${latestSlip.slip_id}`,
+          { headers }
+        );
+        console.log(
+          "🔍 Step 3: Fee breakdown response:",
+          feeBreakdownResponse.data
+        );
+
+        const { fee_breakdown: currentFeeBreakdown } =
+          feeBreakdownResponse.data;
+        console.log("🔍 Step 3: Extracted fee breakdown:", currentFeeBreakdown);
+
+        // Create receipt data with payment information
+        this.receiptData = {
+          receipt_number: `${student.admission_number}_${Date.now()}`,
+          generated_at: new Date().toISOString(),
+          student_info: {
+            name: student.name,
+            admission_number: student.admission_number,
+            father_name: student.father_name,
+            class_name: student.class_name,
+          },
+          payment_details: {
+            payment_date: this.feeSubmission.payment_date,
+            payment_method: this.feeSubmission.payment_method,
+            amount_paid: totalSubmitted,
+            fee_type: submittedFees.join(", "),
+          },
+          fee_breakdown: {
+            admission_fee: {
+              expected: currentFeeBreakdown?.admission_fee?.expected || 0,
+              paid: currentFeeBreakdown?.admission_fee?.paid || 0,
+              remaining: currentFeeBreakdown?.admission_fee?.remaining || 0,
+              status: this.calculateFeeStatus(
+                currentFeeBreakdown?.admission_fee?.paid || 0,
+                currentFeeBreakdown?.admission_fee?.expected || 0
+              ),
+            },
+            monthly_fee: {
+              expected: currentFeeBreakdown?.monthly_fee?.expected || 0,
+              paid: currentFeeBreakdown?.monthly_fee?.paid || 0,
+              remaining: currentFeeBreakdown?.monthly_fee?.remaining || 0,
+              status: this.calculateFeeStatus(
+                currentFeeBreakdown?.monthly_fee?.paid || 0,
+                currentFeeBreakdown?.monthly_fee?.expected || 0
+              ),
+            },
+            transport_fee: {
+              expected: currentFeeBreakdown?.transport_fee?.expected || 0,
+              paid: currentFeeBreakdown?.transport_fee?.paid || 0,
+              remaining: currentFeeBreakdown?.transport_fee?.remaining || 0,
+              status: this.calculateFeeStatus(
+                currentFeeBreakdown?.transport_fee?.paid || 0,
+                currentFeeBreakdown?.transport_fee?.expected || 0
+              ),
+            },
+            arrears: {
+              expected: currentFeeBreakdown?.arrears?.expected || 0,
+              paid: currentFeeBreakdown?.arrears?.paid || 0,
+              remaining: currentFeeBreakdown?.arrears?.remaining || 0,
+              status: this.calculateFeeStatus(
+                currentFeeBreakdown?.arrears?.paid || 0,
+                currentFeeBreakdown?.arrears?.expected || 0
+              ),
+            },
+            fine: {
+              expected: currentFeeBreakdown?.fine?.expected || 0,
+              paid: currentFeeBreakdown?.fine?.paid || 0,
+              remaining: currentFeeBreakdown?.fine?.remaining || 0,
+              status: this.calculateFeeStatus(
+                currentFeeBreakdown?.fine?.paid || 0,
+                currentFeeBreakdown?.fine?.expected || 0
+              ),
+            },
+            annual_fee: {
+              expected: currentFeeBreakdown?.annual_fee?.expected || 0,
+              paid: currentFeeBreakdown?.annual_fee?.paid || 0,
+              remaining: currentFeeBreakdown?.annual_fee?.remaining || 0,
+              status: this.calculateFeeStatus(
+                currentFeeBreakdown?.annual_fee?.paid || 0,
+                currentFeeBreakdown?.annual_fee?.expected || 0
+              ),
+            },
+          },
+          summary: {
+            total_expected:
+              (currentFeeBreakdown?.admission_fee?.expected || 0) +
+              (currentFeeBreakdown?.monthly_fee?.expected || 0) +
+              (currentFeeBreakdown?.transport_fee?.expected || 0) +
+              (currentFeeBreakdown?.arrears?.expected || 0) +
+              (currentFeeBreakdown?.fine?.expected || 0) +
+              (currentFeeBreakdown?.annual_fee?.expected || 0),
+            total_paid:
+              (currentFeeBreakdown?.admission_fee?.paid || 0) +
+              (currentFeeBreakdown?.monthly_fee?.paid || 0) +
+              (currentFeeBreakdown?.transport_fee?.paid || 0) +
+              (currentFeeBreakdown?.arrears?.paid || 0) +
+              (currentFeeBreakdown?.fine?.paid || 0) +
+              (currentFeeBreakdown?.annual_fee?.paid || 0),
+            total_remaining: 0,
+            payment_status: "PARTIAL",
+          },
+        };
+
+        // Calculate total remaining
+        this.receiptData.summary.total_remaining =
+          this.receiptData.summary.total_expected -
+          this.receiptData.summary.total_paid;
+
+        // Determine overall payment status
+        if (this.receiptData.summary.total_remaining <= 0) {
+          this.receiptData.summary.payment_status = "PAID";
+        } else if (this.receiptData.summary.total_paid > 0) {
+          this.receiptData.summary.payment_status = "PARTIAL";
+        } else {
+          this.receiptData.summary.payment_status = "PENDING";
+        }
+
+        console.log("✅ Receipt data generated:", this.receiptData);
+
+        // Show the receipt
+        console.log("🔍 Step 4: Setting showReceipt to true");
+        this.showReceipt = true;
+        console.log("🔍 Step 4: showReceipt is now:", this.showReceipt);
+      } catch (error) {
+        console.error("❌ Error generating receipt:", error);
+        this.$toast.error(
+          "Could not generate receipt, but payment was successful"
+        );
+      }
+    },
+
+    calculateFeeStatus(paid, total) {
+      if (total <= 0) return "N/A";
+      if (paid >= total) return "PAID";
+      if (paid > 0) return "PARTIAL";
+      return "PENDING";
+    },
+
+    generateFeeBreakdownTableRows() {
+      if (!this.receiptData || !this.receiptData.fee_breakdown) return "";
+
+      let rows = "";
+      const feeTypes = [
+        { key: "admission_fee", name: "Admission Fee" },
+        { key: "monthly_fee", name: "Monthly Fee" },
+        { key: "transport_fee", name: "Transport Fee" },
+        { key: "arrears", name: "Arrears" },
+        { key: "fine", name: "Fine" },
+        { key: "annual_fee", name: "Annual Fee" },
+      ];
+
+      feeTypes.forEach((feeType) => {
+        const fee = this.receiptData.fee_breakdown[feeType.key];
+        if (!fee) return;
+
+        // Always show Arrears row, even if 0; others only if expected > 0
+        const shouldShow =
+          feeType.key === "arrears"
+            ? true
+            : (parseFloat(fee.expected) || 0) > 0;
+
+        if (shouldShow) {
+          rows += `
+            <tr style="border-bottom: 1px solid #ccc;">
+              <td style="padding: 2px; font-size: 9px;">${feeType.name}</td>
+              <td style="text-align: center; padding: 2px; font-size: 9px;">Rs${fee.expected}</td>
+              <td style="text-align: center; padding: 2px; color: green; font-weight: bold; font-size: 9px;">Rs${fee.paid}</td>
+              <td style="text-align: center; padding: 2px; color: orange; font-weight: bold; font-size: 9px;">Rs${fee.remaining}</td>
+              <td style="text-align: center; padding: 2px; font-weight: bold; font-size: 9px;">${fee.status}</td>
+            </tr>
+          `;
+        }
+      });
+
+      return rows;
+    },
+
+    // Test method to manually show receipt
+    testShowReceipt() {
+      console.log("🔍 Testing receipt display manually");
+      this.receiptData = {
+        receipt_number: "TEST_123",
+        generated_at: new Date().toISOString(),
+        student_info: {
+          name: "Test Student",
+          admission_number: "12345",
+          father_name: "Test Father",
+          class_name: "Test Class",
+        },
+        payment_details: {
+          payment_date: new Date().toISOString(),
+          payment_method: "Cash",
+          amount_paid: 1000,
+          fee_type: "Test Fee",
+        },
+        fee_breakdown: {
+          admission_fee: {
+            expected: 5000,
+            paid: 1000,
+            remaining: 4000,
+            status: "PARTIAL",
+          },
+          monthly_fee: {
+            expected: 2000,
+            paid: 0,
+            remaining: 2000,
+            status: "PENDING",
+          },
+          transport_fee: { expected: 0, paid: 0, remaining: 0, status: "N/A" },
+          arrears: { expected: 0, paid: 0, remaining: 0, status: "N/A" },
+          fine: { expected: 0, paid: 0, remaining: 0, status: "N/A" },
+          annual_fee: { expected: 0, paid: 0, remaining: 0, status: "N/A" },
+        },
+        summary: {
+          total_expected: 7000,
+          total_paid: 1000,
+          total_remaining: 6000,
+          payment_status: "PARTIAL",
+        },
+      };
+      this.showReceipt = true;
+      console.log("🔍 Test receipt set, showReceipt:", this.showReceipt);
+    },
+
+    closeReceipt() {
+      this.showReceipt = false;
+      this.receiptData = null;
+    },
+
+    printReceipt() {
+      if (!this.receiptData) {
+        this.$toast.error("No receipt data available to print");
+        return;
+      }
+
+      try {
+        // Create professional receipt print format matching the uploaded design
+        const printContent = `
+          <div style="font-family: 'Times New Roman', serif; width: 132mm; max-width: 132mm; margin: 0 auto; background: #fff; max-height: 194mm; font-size: 10px; overflow: hidden;">
+            <!-- Header with logos and school info -->
+            <div style="padding: 12px 16px 8px 16px; border-bottom: 2px solid #000;">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <img src="${EducatorsLogo}" alt="The Educators" style="height: 22mm; width: 28mm; object-fit: contain;"/>
+                <div style="text-align:center; flex:1; margin: 0 8px;">
+                  <div style="font-size: 26px; font-weight: 800; letter-spacing: 1px;">THE EDUCATORS</div>
+                  <div style="font-size: 11px; margin-top: 2px;">A Project of Beaconhouse School System</div>
+                  <div style="font-size: 11px; margin-top: 2px;">Kohat Road Peshawar</div>
+                  
+                </div>
+                <img src="${BeaconhouseLogo}" alt="Beaconhouse" style="height: 22mm; width: 28mm; object-fit: contain;"/>
+              </div>
+              <div style="text-align:center; margin-top: 6px;">
+                <div style="font-size: 16px; font-weight: 700; letter-spacing: 1px;">FEE RECEIPT</div>
+                <div style="display:flex; justify-content:space-between; font-size: 11px; margin-top: 6px;">
+                  <span><strong>Receipt No:</strong> ${
+                    this.receiptData.receipt_number
+                  }</span>
+                  <span><strong>Date:</strong> ${this.formatDate(
+                    this.receiptData.generated_at,
+                    "MMMM DD, YYYY [at] HH:mm A"
+                  )}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Student Information -->
+            <div style="padding: 12px 16px; border-bottom: 1px solid #000;">
+              <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px;">Student Information</div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <div style="flex:1; padding-right:8px;"><strong>Student Name:</strong> ${
+                  this.receiptData.student_info.name
+                }</div>
+                <div style="flex:1; text-align:right;"><strong>Admission No:</strong> ${
+                  this.receiptData.student_info.admission_number
+                }</div>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <div style="flex:1; padding-right:8px;"><strong>Father's Name:</strong> ${
+                  this.receiptData.student_info.father_name
+                }</div>
+                <div style="flex:1; text-align:right;"><strong>Class:</strong> ${
+                  this.receiptData.student_info.class_name
+                }</div>
+              </div>
+            </div>
+
+            <!-- Payment Details -->
+            <div style="padding: 12px 16px; border-bottom: 1px solid #000;">
+              <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px;">Payment Details</div>
+              <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                <div style="flex:1; padding-right:8px;"><strong>Payment Date:</strong> ${this.formatDate(
+                  this.receiptData.payment_details.payment_date,
+                  "MMMM DD, YYYY [at] HH:mm A"
+                )}</div>
+                <div style="flex:1; text-align:right;"><strong>Payment Method:</strong> ${
+                  this.receiptData.payment_details.payment_method
+                }</div>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <div style="flex:1; padding-right:8px;"><strong>Amount Paid:</strong> <span style="color:#0a7d27; font-weight:700;">Rs${
+                  this.receiptData.payment_details.amount_paid
+                }.00</span></div>
+                <div style="flex:1; text-align:right;"><strong>Fee Type:</strong> ${
+                  this.receiptData.payment_details.fee_type
+                }</div>
+              </div>
+            </div>
+
+            <!-- Fee Breakdown -->
+            <div style="padding: 12px 16px;">
+              <div style="font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 8px;">Fee Breakdown</div>
+              <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px;">
+                <thead>
+                  <tr>
+                    <th style="text-align:left; border-bottom: 1px solid #000; padding: 8px 6px;">Fee Type</th>
+                    <th style="text-align:center; border-bottom: 1px solid #000; padding: 8px 6px;">Expected</th>
+                    <th style="text-align:center; border-bottom: 1px solid #000; padding: 8px 6px;">Paid</th>
+                    <th style="text-align:center; border-bottom: 1px solid #000; padding: 8px 6px;">Remaining</th>
+                    <th style="text-align:center; border-bottom: 1px solid #000; padding: 8px 6px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${this.generateFeeBreakdownTableRows()}
+                </tbody>
+              </table>
+
+              <div style="display:flex; gap:8px;">
+                <div style="flex:1; border: 1px solid #000; padding: 10px; text-align:center;">
+                  <div style="font-weight:700; margin-bottom:6px;">TOTAL EXPECTED</div>
+                  <div style="font-size:18px; font-weight:800;">Rs${
+                    this.receiptData.summary.total_expected
+                  }</div>
+                </div>
+                <div style="flex:1; border: 1px solid #000; padding: 10px; text-align:center;">
+                  <div style="font-weight:700; margin-bottom:6px; color:#0a7d27;">TOTAL PAID</div>
+                  <div style="font-size:18px; font-weight:800; color:#0a7d27;">Rs${
+                    this.receiptData.summary.total_paid
+                  }</div>
+                </div>
+                <div style="flex:1; border: 1px solid #000; padding: 10px; text-align:center;">
+                  <div style="font-weight:700; margin-bottom:6px; color:#c26c00;">TOTAL REMAINING</div>
+                  <div style="font-size:18px; font-weight:800; color:#c26c00;">Rs${
+                    this.receiptData.summary.total_remaining
+                  }</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Payment Status & Footer -->
+            <div style="text-align:center; padding: 12px 16px; border-top: 1px solid #000; background:#f6f6f6;">
+              <div style="display:inline-block; border: 1px solid #000; padding: 6px 12px; font-weight:700; background:#fff;">
+                ${
+                  this.receiptData.summary.payment_status === "PAID"
+                    ? "FULLY PAID"
+                    : this.receiptData.summary.payment_status
+                }
+              </div>
+              <div style="display:flex; justify-content:space-between; margin-top: 16px;">
+                <div style="text-align:center; flex:1; padding: 0 8px;">
+                  <div style="border-bottom: 1px solid #000; height: 0; margin: 0 20px 8px 20px;"></div>
+                  <div><strong>Student/Parent Signature</strong></div>
+                </div>
+                <div style="text-align:center; flex:1; padding: 0 8px;">
+                  <div style="border-bottom: 1px solid #000; height: 0; margin: 0 20px 8px 20px;"></div>
+                  <div><strong>Authorized Signature</strong></div>
+                </div>
+              </div>
+              <div style="margin-top: 10px; font-size: 11px;">This is a computer generated receipt. No signature required.</div>
+            </div>
+          </div>
+        `;
+
+        const printWindow = window.open("", "_blank");
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Fee Receipt - ${this.receiptData.student_info.name}</title>
+              <style>
+                @page {
+                  size: A5;
+                  margin: 8mm;
+                }
+                body { 
+                  margin: 0; 
+                  font-size: 10px; 
+                  font-family: 'Times New Roman', serif; 
+                  overflow: hidden;
+                }
+                img { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+                @media print {
+                  body { margin: 0; overflow: hidden; }
+                  .receipt-container {
+                    page-break-inside: avoid;
+                    max-height: 194mm;
+                    overflow: hidden;
+                  }
+                }
+              </style>
+            </head>
+            <body>
+              ${printContent}
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+
+        const triggerPrint = () => {
+          try {
+            printWindow.focus();
+            printWindow.print();
+          } finally {
+            printWindow.close();
+          }
+        };
+
+        const waitForImagesAndPrint = () => {
+          const images = Array.from(printWindow.document.images || []);
+          if (images.length === 0) {
+            triggerPrint();
+            return;
+          }
+          let loadedCount = 0;
+          const done = () => {
+            loadedCount += 1;
+            if (loadedCount >= images.length) {
+              triggerPrint();
+            }
+          };
+          images.forEach((img) => {
+            if (img.complete) {
+              // Give the browser one tick to decode
+              setTimeout(done, 0);
+            } else {
+              img.addEventListener("load", done, { once: true });
+              img.addEventListener("error", done, { once: true });
+            }
+          });
+        };
+
+        if (printWindow.document.readyState === "complete") {
+          waitForImagesAndPrint();
+        } else {
+          printWindow.addEventListener("load", waitForImagesAndPrint, {
+            once: true,
+          });
+        }
+      } catch (error) {
+        console.error("Error printing receipt:", error);
+        this.$toast.error("Error printing receipt");
+      }
+    },
+
     editFee(fee) {
       // Implement fee editing
       console.log("Edit fee:", fee);
     },
 
-    // Selection Methods
-    selectAllFees() {
+    // Selection Methods for Fee Management Table
+    selectAllFeesTable() {
       if (this.selectedFees.length === this.filteredFees.length) {
         // If all are selected, deselect all
         this.selectedFees = [];
@@ -2907,12 +6380,16 @@ export default {
       let errorCount = 0;
 
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
         for (const fee of this.selectedFees) {
           try {
-            await axios.delete(`http://localhost:8081/api/fees/${fee.id}`, {
-              headers: { Authorization: user.token },
+            await axios.delete(`/api/fees/${fee.id}`, {
+              headers: headers,
             });
             successCount++;
           } catch (error) {
@@ -2968,9 +6445,13 @@ export default {
         loading: false,
         onConfirm: async () => {
           try {
-            const user = JSON.parse(localStorage.getItem("user"));
-            await axios.delete(`http://localhost:8081/api/fees/${fee.id}`, {
-              headers: { Authorization: user.token },
+            const authData = getAuthData();
+            const headers =
+              authData && authData.token
+                ? { Authorization: `Bearer ${authData.token}` }
+                : {};
+            await axios.delete(`/api/fees/${fee.id}`, {
+              headers: headers,
             });
 
             this.$toast.success("Fee record deleted successfully!");
@@ -3003,9 +6484,13 @@ export default {
 
       this.feeLoading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        await axios.post("http://localhost:8081/api/fees", this.feeForm, {
-          headers: { Authorization: user.token },
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+        await axios.post("/api/fees", this.feeForm, {
+          headers: headers,
         });
 
         this.successDialog = true;
@@ -3032,14 +6517,9 @@ export default {
       this.feeForm.year = new Date().getFullYear();
     },
 
-    formatDate(dateString) {
-      if (!dateString) return "";
-      return new Date(dateString).toLocaleDateString();
-    },
-
-    getStudentAvatar(studentName = null) {
+    getStudentAvatar(studentName = "") {
+      // Return a default avatar when no student is selected or name is undefined
       if (!studentName) {
-        // Return a default avatar when no student is selected
         return "https://ui-avatars.com/api/?name=Student&background=1976d2&color=fff&size=50";
       }
 
@@ -3047,6 +6527,116 @@ export default {
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         studentName
       )}&background=1976d2&color=fff&size=50`;
+    },
+
+    searchStudent() {
+      // Clear previous timeout
+      if (this.studentSearchTimeout) {
+        clearTimeout(this.studentSearchTimeout);
+      }
+
+      // Set a new timeout to debounce the search
+      this.studentSearchTimeout = setTimeout(async () => {
+        if (
+          !this.studentSearchQuery ||
+          this.studentSearchQuery.trim().length < 2
+        ) {
+          this.studentSearchResults = [];
+          this.studentSearchLoading = false;
+          return;
+        }
+
+        this.studentSearchLoading = true;
+
+        try {
+          const authData = getAuthData();
+          const headers =
+            authData && authData.token
+              ? { Authorization: `Bearer ${authData.token}` }
+              : {};
+
+          const response = await axios.get(
+            `/api/students/search?query=${encodeURIComponent(
+              this.studentSearchQuery.trim()
+            )}`,
+            {
+              headers: headers,
+            }
+          );
+
+          this.studentSearchResults = response.data.slice(0, 10); // Limit to 10 results
+        } catch (error) {
+          console.error("Error searching students:", error);
+          this.studentSearchResults = [];
+        } finally {
+          this.studentSearchLoading = false;
+        }
+      }, 300); // Wait 300ms after user stops typing
+    },
+
+    async selectStudentFromSearch(student) {
+      if (!student) {
+        console.error("Invalid student data passed to selectStudentFromSearch");
+        return;
+      }
+
+      // Set the student info
+      this.selectedStudentInfo = student;
+      this.feeSubmission.student_id = student.id;
+      this.feeSubmission.admission_number = student.admission_number;
+
+      // Load detailed fee breakdown for this student
+      if (student.id) {
+        await this.loadStudentFeeBreakdown(student.id);
+      } else {
+        console.error("Invalid student ID in selectStudentFromSearch");
+      }
+
+      // Clear search results and query
+      this.studentSearchResults = [];
+      this.studentSearchQuery = student.name || ""; // Keep the selected student name with fallback
+
+      this.calculateTotalFee();
+    },
+
+    handleClickOutside(event) {
+      // Close search results when clicking outside
+      const searchContainer = event.target.closest(".search-results-dropdown");
+      const searchInput = event.target.closest("input");
+
+      if (!searchContainer && !searchInput) {
+        this.studentSearchResults = [];
+      }
+    },
+
+    onSearchFocus() {
+      // Show search results if there's a query
+      if (
+        this.studentSearchQuery &&
+        this.studentSearchQuery.trim().length >= 2
+      ) {
+        this.searchStudent();
+      }
+    },
+
+    onSearchBlur() {
+      // Keep search results visible for a short time to allow clicking
+      setTimeout(() => {
+        this.studentSearchResults = [];
+      }, 200);
+    },
+
+    clearStudentSearch() {
+      this.studentSearchQuery = "";
+      this.studentSearchResults = [];
+      this.selectedStudentInfo = null;
+      this.feeSubmission.student_id = null;
+      this.feeSubmission.admission_number = "";
+    },
+
+    clearMainSearch() {
+      this.searchQuery = "";
+      this.loadFees(); // Reload all fees when search is cleared
     },
   },
 };
@@ -4094,6 +7684,29 @@ export default {
   backdrop-filter: blur(15px);
 }
 
+.fee-component-card {
+  transition: all 0.3s ease;
+  border-left: 4px solid transparent;
+}
+
+.fee-component-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.fee-component-card .v-card-text {
+  padding: 12px;
+}
+
+.fee-component-card .v-text-field {
+  margin-top: 8px;
+}
+
+.fee-component-card .v-chip {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .enhanced-submission-actions {
   background: rgba(248, 249, 250, 0.98);
   backdrop-filter: blur(15px);
@@ -4562,6 +8175,64 @@ export default {
   }
 }
 
+.scanner-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+}
+
+.scanning-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: white;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 16px 24px;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.scanning-icon {
+  margin-bottom: 8px;
+  animation: scanning-pulse 1.5s infinite;
+}
+
+.scanning-text {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+@keyframes scanning-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.scanner-controls {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.scanner-info {
+  text-align: center;
+  padding: 16px;
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(59, 130, 246, 0.1);
+}
+
 .stat-card__label {
   font-family: "Inter", sans-serif;
   font-weight: 700;
@@ -5014,5 +8685,92 @@ export default {
 .confirm-btn:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 24px rgba(220, 53, 69, 0.45);
+}
+
+.search-results-dropdown {
+  position: absolute;
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.search-result-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.search-result-item:last-child {
+  border-bottom: none;
+}
+
+.search-result-item:hover {
+  background-color: #f8f9fa;
+  transform: translateX(2px);
+}
+
+.search-result-item:active {
+  background-color: #e3f2fd;
+}
+
+/* Enhanced search field styling */
+.search-field {
+  transition: all 0.3s ease;
+}
+
+.search-field:hover {
+  transform: translateY(-1px);
+}
+
+.search-field:focus-within {
+  transform: translateY(-2px);
+}
+
+/* Receipt Styles */
+.receipt-header {
+  border-bottom: 2px solid #1976d2;
+  padding-bottom: 1rem;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.info-item .label {
+  font-weight: bold;
+  color: #666;
+}
+
+.info-item .value {
+  color: #333;
+}
+
+.fee-breakdown {
+  margin: 2rem 0;
+}
+
+.receipt-summary {
+  margin: 2rem 0;
+}
+
+.payment-status {
+  margin: 2rem 0;
+  text-align: center;
 }
 </style>

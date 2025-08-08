@@ -6,8 +6,22 @@ const multer = require("multer");
 
 const app = express();
 
+// Initialize auto fee slip update service
+const { scheduleAutoUpdate } = require("./services/autoFeeSlipService");
+console.log("🔧 Auto fee slip update service initialized");
+
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:8080",
+      "http://localhost:3000",
+      "https://localhost:8080",
+      "https://localhost:3000",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -36,6 +50,7 @@ app.use("/api/students", require("./routes/studentRoutes"));
 app.use("/api/teachers", require("./routes/teacherRoutes"));
 app.use("/api/fees", require("./routes/feeRoutes"));
 app.use("/api/fee-slips", require("./routes/feeSlipRoutes"));
+app.use("/api/admission-slips", require("./routes/admissionSlipRoutes"));
 app.use("/api/salaries", require("./routes/salaryRoutes"));
 app.use("/api/revenue", require("./routes/revenueRoutes"));
 app.use("/api/expenses", require("./routes/expenseRoutes"));
@@ -49,6 +64,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 8081;
 
-app.listen(PORT, () => {
+app.listen(PORT, "localhost", () => {
   console.log(`Server is running on port ${PORT}`);
+  console.log(`Server accessible at: http://localhost:${PORT}`);
 });

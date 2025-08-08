@@ -14,6 +14,7 @@ const {
   getPendingFees,
   searchFees,
   getFeeHistory,
+  generateReceipt,
 } = require("../controllers/feeController");
 
 // Apply middleware to all routes (temporarily disabled for development)
@@ -57,5 +58,8 @@ router.put("/:id", updateFee);
 
 // Delete fee
 router.delete("/:id", deleteFee);
+
+// Generate receipt after fee submission
+router.post("/receipt", generateReceipt);
 
 module.exports = router;

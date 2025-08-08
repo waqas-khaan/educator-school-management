@@ -16,6 +16,7 @@ const {
   promoteStudents,
   markStudentsLeft,
   reactivateStudent,
+  getClassStudentsFeeStatus,
   upload,
 } = require("../controllers/studentController");
 
@@ -30,6 +31,9 @@ router.get("/classes", getClasses);
 
 // Get class by ID
 router.get("/classes/:classId", getClassById);
+
+// Get fee status for students in a class
+router.get("/classes/:classId/fee-status", getClassStudentsFeeStatus);
 
 // Add new class
 router.post("/classes", addClass);
@@ -51,8 +55,6 @@ router.put("/:id/reactivate", reactivateStudent);
 
 // Get student by admission number
 router.get("/admission/:admissionNumber", getStudentByAdmissionNumber);
-
-
 
 // Get student by ID
 router.get("/:id", getStudentById);

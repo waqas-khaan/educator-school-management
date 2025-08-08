@@ -205,7 +205,9 @@
                   <div class="glass-overlay"></div>
                   <v-card-text class="pa-6 text-center position-relative">
                     <v-avatar size="64" class="mb-4 glass-icon-avatar">
-                      <v-icon size="32" color="success">mdi-account-plus</v-icon>
+                      <v-icon size="32" color="success"
+                        >mdi-account-plus</v-icon
+                      >
                     </v-avatar>
                     <h3
                       class="text-h6 font-weight-bold text-grey-darken-3 mb-2 glass-text elegant-card-title"
@@ -397,14 +399,7 @@
                               >
                                 <v-icon>mdi-eye</v-icon>
                               </v-btn>
-                              <v-btn
-                                icon
-                                small
-                                color="warning"
-                                @click="editSalary(item)"
-                              >
-                                <v-icon>mdi-pencil</v-icon>
-                              </v-btn>
+
                               <v-btn
                                 icon
                                 small
@@ -508,14 +503,7 @@
                               >
                                 <v-icon>mdi-eye</v-icon>
                               </v-btn>
-                              <v-btn
-                                icon
-                                small
-                                color="warning"
-                                @click="editSalary(item)"
-                              >
-                                <v-icon>mdi-pencil</v-icon>
-                              </v-btn>
+
                               <v-btn
                                 icon
                                 small
@@ -1416,9 +1404,7 @@
                 >
                   <v-icon>mdi-eye</v-icon>
                 </v-btn>
-                <v-btn icon small color="warning" @click="editTeacher(item)">
-                  <v-icon>mdi-pencil</v-icon>
-                </v-btn>
+
                 <v-btn icon small color="error" @click="deleteTeacher(item)">
                   <v-icon>mdi-delete</v-icon>
                 </v-btn>
@@ -1779,6 +1765,7 @@
 
 <script>
 import axios from "axios";
+import { getAuthData } from "@/utils/cookies";
 
 export default {
   name: "SalaryManagement",
@@ -2028,7 +2015,6 @@ export default {
     "salaryForm.deductions": "calculateNetSalary",
   },
   mounted() {
-    console.log("SalaryManagement component mounted");
     this.initializeData();
   },
   watch: {
@@ -2040,7 +2026,6 @@ export default {
   },
   methods: {
     async initializeData() {
-      console.log("🔧 Initializing data...");
       // Load teachers first, then salaries, then calculate stats
       await this.loadTeachers();
       await this.loadSalaries();
@@ -2052,17 +2037,17 @@ export default {
     async loadSalaries() {
       this.loading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const headers = user && user.token ? { Authorization: user.token } : {};
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
-        const response = await axios.get("http://localhost:8081/api/salaries", {
+        const response = await axios.get("/api/salaries", {
           headers: headers,
         });
 
-        console.log("Salaries loaded successfully:", response.data);
         this.salaries = response.data;
-        console.log("Total salaries loaded:", this.salaries.length);
-        console.log("Sample salary data:", this.salaries[0]);
         this.calculateSalaryStats();
       } catch (error) {
         console.error("Error loading salaries:", error);
@@ -2101,14 +2086,6 @@ export default {
         avgSalary: avgSalary,
       };
 
-      console.log("Salary Stats Calculated:", {
-        totalEmployees: this.salaryStats.totalEmployees,
-        thisMonth: this.salaryStats.thisMonth,
-        totalPaid: this.salaryStats.totalPaid,
-        avgSalary: this.salaryStats.avgSalary,
-        teachersCount: this.teachers ? this.teachers.length : 0,
-      });
-
       this.calculateMonthlyData();
       this.calculateThisMonthSalaries();
     },
@@ -2121,17 +2098,15 @@ export default {
         ...this.salaryStats, // Keep existing salary stats
         totalEmployees: totalEmployees,
       };
-
-      console.log("Employee Count Updated:", {
-        totalEmployees: this.salaryStats.totalEmployees,
-        teachersCount: this.teachers ? this.teachers.length : 0,
-      });
     },
 
     async addSalaryToExpenses(salaryData) {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const headers = user && user.token ? { Authorization: user.token } : {};
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
         // Create expense data from salary data
         const expenseData = {
@@ -2142,17 +2117,9 @@ export default {
           payment_method: salaryData.payment_method,
         };
 
-        console.log("🔧 Adding salary to expenses:", expenseData);
-
-        const response = await axios.post(
-          "http://localhost:8081/api/expenses",
-          expenseData,
-          {
-            headers: headers,
-          }
-        );
-
-        console.log("✅ Salary added to expenses successfully:", response.data);
+        await axios.post("/api/expenses", expenseData, {
+          headers: headers,
+        });
       } catch (error) {
         console.error("❌ Error adding salary to expenses:", error);
         // Don't show error to user as salary was already added successfully
@@ -2234,11 +2201,14 @@ export default {
 
       this.loading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const headers = user && user.token ? { Authorization: user.token } : {};
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
         const response = await axios.get(
-          `http://localhost:8081/api/salaries/search?query=${this.searchQuery}`,
+          `/api/salaries/search?query=${this.searchQuery}`,
           {
             headers: headers,
           }
@@ -2280,9 +2250,8 @@ export default {
       return colors[method] || "grey";
     },
 
-    viewSalaryDetails(salary) {
+    viewSalaryDetails() {
       // Implement salary details view
-      console.log("View salary details:", salary);
     },
 
     editSalary(salary) {
@@ -2299,10 +2268,7 @@ export default {
           : new Date().toISOString().split("T")[0],
       };
       this.salaryForm = formattedSalary;
-      console.log("🔧 Editing salary:", {
-        original: salary,
-        formatted: formattedSalary,
-      });
+
       this.showSalaryDialog = true;
     },
 
@@ -2314,15 +2280,15 @@ export default {
     async confirmDelete() {
       this.deleteLoading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const headers = user && user.token ? { Authorization: user.token } : {};
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
-        await axios.delete(
-          `http://localhost:8081/api/salaries/${this.selectedSalary.id}`,
-          {
-            headers: headers,
-          }
-        );
+        await axios.delete(`/api/salaries/${this.selectedSalary.id}`, {
+          headers: headers,
+        });
 
         this.successMessage = "Salary record deleted successfully!";
         this.successDialog = true;
@@ -2358,15 +2324,7 @@ export default {
     },
 
     async submitSalary() {
-      console.log("🔧 Attempting to submit salary form...");
-      console.log(
-        "🔧 Form validation result:",
-        this.$refs.salaryForm.validate()
-      );
-      console.log("🔧 Current form data:", this.salaryForm);
-
       if (!this.$refs.salaryForm.validate()) {
-        console.log("❌ Form validation failed");
         return;
       }
 
@@ -2419,62 +2377,21 @@ export default {
           year: parseInt(this.salaryForm.year) || new Date().getFullYear(),
         };
 
-        console.log("🔧 Submitting salary data:", {
-          editingSalary: this.editingSalary,
-          originalForm: this.salaryForm,
-          formattedData: salaryData,
-          headers: headers,
-        });
-
-        // Log each field individually to debug the 400 error
-        console.log("🔧 Field validation:", {
-          employee_name: salaryData.employee_name,
-          employee_id: salaryData.employee_id,
-          phone_number: salaryData.phone_number,
-          designation: salaryData.designation,
-          basic_salary: salaryData.basic_salary,
-          allowances: salaryData.allowances,
-          deductions: salaryData.deductions,
-          net_salary: salaryData.net_salary,
-          payment_date: salaryData.payment_date,
-          payment_method: salaryData.payment_method,
-          month: salaryData.month,
-          year: salaryData.year,
-          remarks: salaryData.remarks,
-        });
-
-        // Check if net_salary is calculated properly
-        console.log("🔧 Net salary calculation check:", {
-          basic_salary: this.salaryForm.basic_salary,
-          allowances: this.salaryForm.allowances,
-          deductions: this.salaryForm.deductions,
-          calculated_net: this.salaryForm.net_salary,
-          final_net: salaryData.net_salary,
-        });
-
         if (this.editingSalary) {
           // Update existing salary
-          console.log("🔧 Updating salary with ID:", this.editingSalary.id);
-          const response = await axios.put(
-            `http://localhost:8081/api/salaries/${this.editingSalary.id}`,
+          await axios.put(
+            `/api/salaries/${this.editingSalary.id}`,
             salaryData,
             {
               headers: headers,
             }
           );
-          console.log("✅ Update response:", response.data);
           this.successMessage = "Salary record updated successfully!";
         } else {
           // Add new salary
-          console.log("🔧 Adding new salary");
-          const response = await axios.post(
-            "http://localhost:8081/api/salaries",
-            salaryData,
-            {
-              headers: headers,
-            }
-          );
-          console.log("✅ Add response:", response.data);
+          await axios.post("/api/salaries", salaryData, {
+            headers: headers,
+          });
           this.successMessage =
             "Salary record added successfully! Expense record also created.";
         }
@@ -2499,22 +2416,17 @@ export default {
     },
 
     async submitAddTeacher() {
-      console.log("🔧 Attempting to submit add teacher form...");
-      console.log(
-        "🔧 Form validation result:",
-        this.$refs.addTeacherForm.validate()
-      );
-      console.log("🔧 Current add teacher form data:", this.addTeacherForm);
-
       if (!this.$refs.addTeacherForm.validate()) {
-        console.log("❌ Add teacher form validation failed");
         return;
       }
 
       this.addTeacherLoading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const headers = user && user.token ? { Authorization: user.token } : {};
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
         // Format the date properly for the database
         const teacherData = {
@@ -2534,22 +2446,9 @@ export default {
             : new Date().toISOString().split("T")[0],
         };
 
-        console.log("🔧 Submitting teacher data:", {
-          addTeacherForm: this.addTeacherForm,
-          formattedData: teacherData,
+        await axios.post("/api/teachers", teacherData, {
           headers: headers,
         });
-
-        // Add new teacher
-        console.log("🔧 Adding new teacher");
-        const response = await axios.post(
-          "http://localhost:8081/api/teachers",
-          teacherData,
-          {
-            headers: headers,
-          }
-        );
-        console.log("✅ Add teacher response:", response.data);
         this.successMessage = `Teacher ${this.addTeacherForm.name} has been added successfully!`;
 
         this.successDialog = true;
@@ -2593,15 +2492,16 @@ export default {
     async loadTeachers() {
       this.teachersLoading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const headers = user && user.token ? { Authorization: user.token } : {};
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
-        const response = await axios.get("http://localhost:8081/api/teachers", {
+        const response = await axios.get("/api/teachers", {
           headers: headers,
         });
 
-        console.log("Teachers loaded successfully:", response.data);
-        console.log("First teacher data:", response.data[0]);
         this.teachers = response.data;
       } catch (error) {
         console.error("Error loading teachers:", error);
@@ -2745,11 +2645,14 @@ export default {
       if (!confirmed) return;
 
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const headers = user && user.token ? { Authorization: user.token } : {};
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
         const deletePromises = this.selectedTeachers.map((teacher) =>
-          axios.delete(`http://localhost:8081/api/teachers/${teacher.id}`, {
+          axios.delete(`/api/teachers/${teacher.id}`, {
             headers,
           })
         );
@@ -2775,10 +2678,13 @@ export default {
       if (!confirmed) return;
 
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const headers = user && user.token ? { Authorization: user.token } : {};
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
-        await axios.delete(`http://localhost:8081/api/teachers/${teacher.id}`, {
+        await axios.delete(`/api/teachers/${teacher.id}`, {
           headers,
         });
 
@@ -2792,24 +2698,6 @@ export default {
     },
 
     viewTeacherDetails(teacher) {
-      console.log("=== TEACHER DATA INSPECTION ===");
-      console.log("Full teacher object:", JSON.stringify(teacher, null, 2));
-      console.log("Teacher name:", teacher.name);
-      console.log("Teacher cnic:", teacher.cnic);
-      console.log("Teacher phone:", teacher.phone);
-      console.log("Teacher email:", teacher.email);
-      console.log("Teacher address:", teacher.address);
-      console.log("Teacher date_of_birth:", teacher.date_of_birth);
-      console.log("Teacher emergency_contact:", teacher.emergency_contact);
-      console.log("Teacher subject:", teacher.subject);
-      console.log("Teacher grade_level:", teacher.grade_level);
-      console.log("Teacher experience_years:", teacher.experience_years);
-      console.log("Teacher qualification:", teacher.qualification);
-      console.log("Teacher salary:", teacher.salary);
-      console.log("Teacher status:", teacher.status);
-      console.log("Teacher joining_date:", teacher.joining_date);
-      console.log("=== END INSPECTION ===");
-
       // Create a normalized teacher object with fallback field names
       const normalizedTeacher = {
         ...teacher,
@@ -2897,16 +2785,17 @@ export default {
       if (confirm(confirmMessage)) {
         this.loading = true;
         try {
-          const user = JSON.parse(localStorage.getItem("user"));
+          const authData = getAuthData();
           const headers =
-            user && user.token ? { Authorization: user.token } : {};
+            authData && authData.token
+              ? { Authorization: `Bearer ${authData.token}` }
+              : {};
 
           // Delete each selected salary
           for (const salary of this.selectedSalaries) {
-            await axios.delete(
-              `http://localhost:8081/api/salaries/${salary.id}`,
-              { headers: headers }
-            );
+            await axios.delete(`/api/salaries/${salary.id}`, {
+              headers: headers,
+            });
           }
 
           this.successMessage = `Successfully deleted ${this.selectedSalaries.length} salary record(s).`;

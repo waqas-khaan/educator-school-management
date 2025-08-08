@@ -425,6 +425,7 @@
 
 <script>
 import axios from "axios";
+import { getAuthData } from "@/utils/cookies";
 
 export default {
   name: "Classes",
@@ -477,13 +478,11 @@ export default {
     async loadStudents() {
       this.loading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const response = await axios.get("http://localhost:8081/api/students", {
-          headers: { Authorization: user.token },
+        const authData = getAuthData();
+        const response = await axios.get("/api/students", {
+          headers: { Authorization: authData?.token },
         });
         this.students = response.data;
-        console.log("Students loaded:", this.students.length);
-        console.log("Students data:", this.students);
       } catch (error) {
         console.error("Error loading students:", error);
       } finally {
@@ -493,23 +492,15 @@ export default {
 
     async loadClassesList() {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const response = await axios.get(
-          "http://localhost:8081/api/students/classes",
-          {
-            headers: { Authorization: user.token },
-          }
-        );
-
-        console.log("Classes API response:", response.data);
+        const authData = getAuthData();
+        const response = await axios.get("/api/students/classes", {
+          headers: { Authorization: authData?.token },
+        });
 
         // Transform the classes data to include student counts
         this.classesList = response.data.map((classItem) => {
           const studentsInClass = this.students.filter(
             (s) => s.class_id === classItem.id && s.status === "Active"
-          );
-          console.log(
-            `Class ${classItem.name}: ${studentsInClass.length} students`
           );
 
           return {
@@ -519,8 +510,6 @@ export default {
             studentsCount: studentsInClass.length,
           };
         });
-
-        console.log("Final classes list:", this.classesList);
       } catch (error) {
         console.error("Error loading classes list:", error);
       }
@@ -538,10 +527,8 @@ export default {
     },
 
     async refreshData() {
-      console.log("Refresh button clicked!");
       this.loading = true;
       try {
-        console.log("Starting refresh...");
         // Clear search query
         this.searchQuery = "";
 
@@ -552,10 +539,6 @@ export default {
         // Reload data
         await this.loadStudents();
         await this.loadClassesList();
-
-        console.log("Refresh completed successfully!");
-        console.log("Students loaded:", this.students.length);
-        console.log("Classes loaded:", this.classesList.length);
       } catch (error) {
         console.error("Error refreshing data:", error);
       } finally {

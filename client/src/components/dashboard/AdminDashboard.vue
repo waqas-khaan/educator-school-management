@@ -184,7 +184,7 @@
                   </v-card>
                 </v-col>
 
-                <!-- Total Revenue -->
+                <!-- Total Staff -->
                 <v-col cols="12" sm="6" md="3">
                   <v-card
                     class="enterprise-stat-card"
@@ -192,18 +192,16 @@
                     rounded="xl"
                   >
                     <v-card-text class="pa-8 text-center">
-                      <div class="stat-card__icon-container teal">
-                        <v-icon size="32" color="white">mdi-chart-line</v-icon>
+                      <div class="stat-card__icon-container purple">
+                        <v-icon size="32" color="white">mdi-account-tie</v-icon>
                       </div>
                       <div class="stat-card__number">
-                        ₨{{ (totalRevenue || 0).toLocaleString() }}
+                        {{ totalTeachers }}
                       </div>
-                      <div class="stat-card__label">TOTAL REVENUE</div>
+                      <div class="stat-card__label">TOTAL STAFF</div>
                       <div class="stat-card__sub-metric">
-                        <span class="sub-label">This Month</span>
-                        <span class="sub-value"
-                          >₨{{ thisMonthRevenue.toLocaleString() }}</span
-                        >
+                        <span class="sub-label">Active</span>
+                        <span class="sub-value">{{ activeTeachers }}</span>
                       </div>
                     </v-card-text>
                   </v-card>
@@ -420,6 +418,9 @@
                   </v-card>
                 </v-col>
               </v-row>
+
+              <!-- Automatic Fee Slip Generation Status -->
+              <v-row class="mb-4"> </v-row>
             </v-card-text>
           </v-card>
         </v-col>
@@ -430,6 +431,7 @@
 
 <script>
 import axios from "axios";
+import { getAuthData } from "@/utils/cookies";
 
 export default {
   name: "AdminDashboard",
@@ -468,22 +470,22 @@ export default {
   },
   async mounted() {
     await this.loadDashboardData();
-    this.userName =
-      JSON.parse(localStorage.getItem("user"))?.name || "Administrator";
+    const authData = getAuthData();
+    this.userName = authData?.user?.name || "Administrator";
   },
   methods: {
     async loadDashboardData() {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const token = user?.token || "mock-token-for-development";
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
         // Load students data
-        const studentsResponse = await axios.get(
-          "http://localhost:8081/api/students",
-          {
-            headers: { Authorization: token },
-          }
-        );
+        const studentsResponse = await axios.get("/api/students", {
+          headers: headers,
+        });
 
         this.students = studentsResponse.data;
         this.totalStudents = studentsResponse.data.length;
@@ -499,12 +501,9 @@ export default {
         ).length;
 
         // Load teachers data
-        const teachersResponse = await axios.get(
-          "http://localhost:8081/api/teachers",
-          {
-            headers: { Authorization: token },
-          }
-        );
+        const teachersResponse = await axios.get("/api/teachers", {
+          headers: headers,
+        });
 
         this.teachers = teachersResponse.data;
         this.totalTeachers = teachersResponse.data.length;
@@ -512,36 +511,47 @@ export default {
           (t) => t.status === "Active"
         ).length;
 
-        // Calculate total fee per month (target)
-        this.totalFeePerMonth = this.activeStudents * 5000; // Assuming 5000 per student
-        this.averageFeePerStudent = this.activeStudents > 0 ? 5000 : 0;
+        // Calculate total fee per month (target) including transport fee
+        const activeStudentRecords = studentsResponse.data.filter(
+          (s) => s.status === "Active"
+        );
+        const monthlyFeeSum = activeStudentRecords.reduce(
+          (sum, s) => sum + (parseFloat(s.monthly_fee) || 0),
+          0
+        );
+        const transportFeeSum = activeStudentRecords.reduce(
+          (sum, s) => sum + (parseFloat(s.transport_fee) || 0),
+          0
+        );
+        this.totalFeePerMonth = monthlyFeeSum + transportFeeSum;
+        this.averageFeePerStudent =
+          activeStudentRecords.length > 0
+            ? Math.round(
+                (this.totalFeePerMonth / activeStudentRecords.length) * 100
+              ) / 100
+            : 0;
 
         // Calculate total salaries (target)
         this.totalSalaries = this.activeTeachers * 25000; // Assuming 25000 per teacher
         this.monthlySalaries = this.totalSalaries;
 
         // Load classes data
-        const classesResponse = await axios.get(
-          "http://localhost:8081/api/students/classes",
-          {
-            headers: { Authorization: token },
-          }
-        );
+        const classesResponse = await axios.get("/api/students/classes", {
+          headers: headers,
+        });
 
         this.totalClasses = classesResponse.data.length;
 
         // Load fees data
-        const feesResponse = await axios.get("http://localhost:8081/api/fees", {
-          headers: { Authorization: token },
+        const feesResponse = await axios.get("/api/fees", {
+          headers: headers,
         });
 
         this.fees = feesResponse.data;
-        console.log("Fees data:", feesResponse.data);
         this.totalRevenue = feesResponse.data.reduce(
           (sum, fee) => sum + (parseFloat(fee.amount) || 0),
           0
         );
-        console.log("Total revenue calculated:", this.totalRevenue);
 
         // Calculate this month revenue
         const currentMonth = new Date().getMonth() + 1;
@@ -554,12 +564,9 @@ export default {
           .reduce((sum, fee) => sum + Number(fee.amount), 0);
 
         // Load pending fees
-        const pendingResponse = await axios.get(
-          "http://localhost:8081/api/fees/pending",
-          {
-            headers: { Authorization: token },
-          }
-        );
+        const pendingResponse = await axios.get("/api/fees/pending", {
+          headers: headers,
+        });
 
         this.pendingFees = pendingResponse.data.reduce(
           (sum, student) => sum + student.arrears_amount,
@@ -575,20 +582,15 @@ export default {
           .reduce((sum, fee) => sum + Number(fee.amount), 0);
 
         // Load revenue data for inflow
-        const revenueResponse = await axios.get(
-          "http://localhost:8081/api/revenue",
-          {
-            headers: { Authorization: token },
-          }
-        );
+        const revenueResponse = await axios.get("/api/revenue", {
+          headers: headers,
+        });
 
         this.revenues = revenueResponse.data;
-        console.log("Revenue data:", revenueResponse.data);
         this.totalInflow = revenueResponse.data.reduce(
           (sum, revenue) => sum + (parseFloat(revenue.amount) || 0),
           0
         );
-        console.log("Total inflow calculated:", this.totalInflow);
 
         // Calculate this month inflow
         this.thisMonthInflow = revenueResponse.data
@@ -600,20 +602,15 @@ export default {
           .reduce((sum, revenue) => sum + Number(revenue.amount), 0);
 
         // Load expenses data
-        const expensesResponse = await axios.get(
-          "http://localhost:8081/api/expenses",
-          {
-            headers: { Authorization: token },
-          }
-        );
+        const expensesResponse = await axios.get("/api/expenses", {
+          headers: headers,
+        });
 
         this.expenses = expensesResponse.data;
-        console.log("Expenses data:", expensesResponse.data);
         this.totalExpenses = expensesResponse.data.reduce(
           (sum, expense) => sum + (parseFloat(expense.amount) || 0),
           0
         );
-        console.log("Total expenses calculated:", this.totalExpenses);
 
         // Calculate this month expenses
         this.thisMonthExpenses = expensesResponse.data
@@ -630,15 +627,11 @@ export default {
           this.totalInflow - this.totalExpenses
         );
         this.availableCash = this.totalCashInHand;
-        console.log("Cash in hand calculated:", this.totalCashInHand);
 
         // Load salaries data
-        const salariesResponse = await axios.get(
-          "http://localhost:8081/api/salaries",
-          {
-            headers: { Authorization: token },
-          }
-        );
+        const salariesResponse = await axios.get("/api/salaries", {
+          headers: headers,
+        });
 
         // Update total salaries from actual data
         this.totalSalaries = salariesResponse.data.reduce(
@@ -1267,11 +1260,13 @@ export default {
 .stat-card__number {
   font-family: "Poppins", "Inter", sans-serif;
   font-weight: 900;
-  font-size: 2.8rem;
+  font-size: clamp(1.6rem, 6vw, 2.8rem);
   color: #1e293b;
   margin-bottom: 12px;
   letter-spacing: -0.03em;
-  line-height: 1;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
   transition: all 0.15s ease;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
@@ -2770,6 +2765,1086 @@ export default {
   }
 
   .glass-icon-avatar .v-icon {
+    font-size: 24px !important;
+  }
+}
+
+/* Modern Welcome Card Design */
+.modern-welcome-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  position: relative;
+  overflow: hidden;
+  border: none;
+  box-shadow: 0 20px 60px rgba(102, 126, 234, 0.3);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.modern-welcome-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 25px 80px rgba(102, 126, 234, 0.4);
+}
+
+.welcome-card-background {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+  background-size: 200% 200%;
+  animation: gradientShift 8s ease-in-out infinite;
+}
+
+@keyframes gradientShift {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.welcome-card-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="dots" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23dots)"/></svg>');
+  opacity: 0.3;
+}
+
+.welcome-card-content {
+  position: relative;
+  z-index: 2;
+  color: white;
+}
+
+.welcome-text-section {
+  flex: 1;
+  min-width: 300px;
+}
+
+.welcome-avatar {
+  background: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.welcome-avatar:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.welcome-title {
+  font-family: "Playfair Display", serif !important;
+  font-weight: 700 !important;
+  font-size: 2rem !important;
+  color: white !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.welcome-subtitle {
+  font-family: "Inter", sans-serif !important;
+  font-weight: 400 !important;
+  font-size: 1.1rem !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  letter-spacing: 0.01em;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.welcome-stats {
+  margin-top: 16px;
+}
+
+.welcome-chip {
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  font-size: 0.75rem !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.welcome-chip:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15) !important;
+}
+
+.welcome-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 200px;
+}
+
+.refresh-btn-modern {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #667eea !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  font-size: 0.875rem !important;
+  padding: 12px 24px !important;
+  border: 2px solid rgba(255, 255, 255, 0.3) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.refresh-btn-modern::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  transition: left 0.5s;
+}
+
+.refresh-btn-modern:hover::before {
+  left: 100%;
+}
+
+.refresh-btn-modern:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 12px 32px rgba(102, 126, 234, 0.4) !important;
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: rgba(102, 126, 234, 0.5) !important;
+}
+
+.refresh-btn-modern:active {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3) !important;
+}
+
+.refresh-btn-modern .v-icon {
+  transition: transform 0.3s ease;
+}
+
+.refresh-btn-modern:hover .v-icon {
+  transform: rotate(180deg);
+}
+
+/* Loading animation for refresh button */
+.refresh-btn-modern.loading .v-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive Design for Welcome Card */
+@media (max-width: 1200px) {
+  .welcome-title {
+    font-size: 1.75rem !important;
+  }
+
+  .welcome-subtitle {
+    font-size: 1rem !important;
+  }
+
+  .welcome-card-content {
+    padding: 24px !important;
+  }
+}
+
+@media (max-width: 960px) {
+  .welcome-title {
+    font-size: 1.5rem !important;
+  }
+
+  .welcome-subtitle {
+    font-size: 0.9rem !important;
+  }
+
+  .welcome-card-content {
+    padding: 20px !important;
+  }
+
+  .welcome-text-section {
+    min-width: 250px;
+  }
+
+  .welcome-actions {
+    min-width: 180px;
+  }
+}
+
+@media (max-width: 600px) {
+  .modern-welcome-card {
+    margin-bottom: 16px !important;
+  }
+
+  .welcome-card-content {
+    padding: 16px !important;
+  }
+
+  .welcome-title {
+    font-size: 1.25rem !important;
+  }
+
+  .welcome-subtitle {
+    font-size: 0.8rem !important;
+  }
+
+  .welcome-avatar {
+    size: 48px !important;
+  }
+
+  .welcome-avatar .v-icon {
+    font-size: 24px !important;
+  }
+
+  .welcome-text-section {
+    min-width: 200px;
+  }
+
+  .welcome-actions {
+    min-width: 150px;
+  }
+
+  .refresh-btn-modern {
+    padding: 8px 16px !important;
+    font-size: 0.75rem !important;
+  }
+
+  .welcome-stats {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .welcome-chip {
+    margin-bottom: 8px !important;
+  }
+}
+
+.date-chip-modern {
+  background: linear-gradient(
+    135deg,
+    #667eea 0%,
+    #764ba2 50%,
+    #f093fb 100%
+  ) !important;
+  color: white !important;
+  border-radius: 20px !important;
+  padding: 12px 24px !important;
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3) !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.date-chip-modern::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.6s;
+}
+
+.date-chip-modern:hover::before {
+  left: 100%;
+}
+
+.date-chip-modern:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 12px 32px rgba(102, 126, 234, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.date-icon {
+  margin-right: 8px !important;
+  font-size: 1.1rem !important;
+  transition: all 0.3s ease !important;
+}
+
+.date-chip-modern:hover .date-icon {
+  transform: scale(1.1) !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2)) !important;
+}
+
+.date-text {
+  font-family: "Inter", sans-serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+  transition: all 0.3s ease !important;
+}
+
+.date-chip-modern:hover .date-text {
+  transform: scale(1.02) !important;
+}
+
+.status-chip-modern {
+  background: linear-gradient(
+    135deg,
+    #11998e 0%,
+    #38ef7d 50%,
+    #4ade80 100%
+  ) !important;
+  color: white !important;
+  border-radius: 20px !important;
+  padding: 12px 24px !important;
+  font-size: 0.9rem !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  box-shadow: 0 8px 24px rgba(17, 153, 142, 0.3) !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+.status-chip-modern::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.6s;
+}
+
+.status-chip-modern:hover::before {
+  left: 100%;
+}
+
+.status-chip-modern:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 12px 32px rgba(17, 153, 142, 0.4) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.status-icon {
+  margin-right: 8px !important;
+  font-size: 1.1rem !important;
+  transition: all 0.3s ease !important;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+.status-chip-modern:hover .status-icon {
+  transform: scale(1.2) !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2)) !important;
+  animation: none;
+}
+
+.status-text {
+  font-family: "Inter", sans-serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.2) !important;
+  transition: all 0.3s ease !important;
+}
+
+.status-chip-modern:hover .status-text {
+  transform: scale(1.02) !important;
+}
+
+/* Enhanced welcome stats container */
+.welcome-stats {
+  margin-top: 20px;
+  gap: 12px;
+}
+
+/* Responsive design for chips */
+@media (max-width: 1200px) {
+  .date-chip-modern,
+  .status-chip-modern {
+    padding: 10px 20px !important;
+    font-size: 0.85rem !important;
+  }
+
+  .date-icon,
+  .status-icon {
+    font-size: 1rem !important;
+  }
+}
+
+@media (max-width: 960px) {
+  .date-chip-modern,
+  .status-chip-modern {
+    padding: 8px 16px !important;
+    font-size: 0.8rem !important;
+  }
+
+  .date-icon,
+  .status-icon {
+    font-size: 0.9rem !important;
+    margin-right: 6px !important;
+  }
+
+  .welcome-stats {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 600px) {
+  .welcome-stats {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .date-chip-modern,
+  .status-chip-modern {
+    padding: 6px 12px !important;
+    font-size: 0.75rem !important;
+    border-radius: 16px !important;
+  }
+
+  .date-icon,
+  .status-icon {
+    font-size: 0.8rem !important;
+    margin-right: 4px !important;
+  }
+
+  .date-text,
+  .status-text {
+    font-size: 0.75rem !important;
+  }
+}
+
+/* Header Refresh Button Styling */
+.refresh-btn-header {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
+  color: #1e3a8a !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  text-transform: uppercase !important;
+  box-shadow: 0 4px 15px rgba(255, 255, 255, 0.3) !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.refresh-btn-header:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px rgba(255, 255, 255, 0.4) !important;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 100%) !important;
+}
+
+.refresh-btn-header .v-icon {
+  transition: transform 0.3s ease;
+}
+
+.refresh-btn-header:hover .v-icon {
+  transform: rotate(180deg);
+}
+
+/* Header Chip Border Styling */
+.header-chip-border {
+  border: 2px solid rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Professional Statistics Dashboard Styling */
+.professional-avatar {
+  background: linear-gradient(
+    135deg,
+    #667eea 0%,
+    #764ba2 50%,
+    #f093fb 100%
+  ) !important;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3) !important;
+  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+.professional-title {
+  font-family: "Poppins", sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%) !important;
+  -webkit-background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+  background-clip: text !important;
+}
+
+.professional-subtitle {
+  font-family: "Inter", sans-serif !important;
+  font-weight: 400 !important;
+  color: #64748b !important;
+  letter-spacing: 0.01em !important;
+}
+
+.professional-chip {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Professional Stat Cards */
+.professional-stat-card {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%) !important;
+  border: 3px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08) !important;
+  transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+  overflow: hidden;
+  position: relative;
+  min-height: 220px;
+}
+
+.professional-stat-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(102, 126, 234, 0.02) 0%,
+    rgba(118, 75, 162, 0.02) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+
+.professional-stat-card:hover {
+  transform: translateY(-8px) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+.professional-stat-card:hover::before {
+  opacity: 1;
+}
+
+/* Gradient Backgrounds for Professional Cards */
+.primary-gradient {
+  background: linear-gradient(
+    135deg,
+    #667eea 0%,
+    #764ba2 50%,
+    #f093fb 100%
+  ) !important;
+}
+
+.secondary-gradient {
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%) !important;
+}
+
+.accent-gradient {
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+}
+
+.warm-gradient {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+}
+
+/* Professional Card Content Styling */
+.professional-icon-avatar {
+  background: rgba(255, 255, 255, 0.2) !important;
+  backdrop-filter: blur(10px) !important;
+  border: 1px solid rgba(255, 255, 255, 0.3) !important;
+  transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.professional-icon-avatar:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: scale(1.05) rotate(5deg) !important;
+  box-shadow: 0 8px 25px rgba(255, 255, 255, 0.3) !important;
+}
+
+.professional-icon {
+  transition: all 0.15s ease !important;
+}
+
+.professional-icon-avatar:hover .professional-icon {
+  transform: scale(1.1) !important;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2)) !important;
+}
+
+.professional-status-icon {
+  opacity: 0.8;
+  transition: all 0.15s ease;
+}
+
+.professional-stat-card:hover .professional-status-icon {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.professional-card-title {
+  font-family: "Inter", sans-serif !important;
+  font-weight: 700 !important;
+  font-size: 1.1rem !important;
+  color: white !important;
+  margin-bottom: 4px !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.2 !important;
+}
+
+.professional-card-subtitle {
+  font-family: "Inter", sans-serif !important;
+  font-weight: 500 !important;
+  font-size: 0.9rem !important;
+  color: rgba(255, 255, 255, 0.8) !important;
+  letter-spacing: 0.01em !important;
+  line-height: 1.3 !important;
+}
+
+.professional-stat-number {
+  font-family: "Poppins", sans-serif !important;
+  font-weight: 800 !important;
+  font-size: 2.5rem !important;
+  color: white !important;
+  margin-bottom: 8px !important;
+  letter-spacing: -0.02em !important;
+  line-height: 1 !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.professional-divider {
+  background: rgba(255, 255, 255, 0.3) !important;
+  height: 1px !important;
+}
+
+.professional-stat-label {
+  font-family: "Inter", sans-serif !important;
+  font-weight: 500 !important;
+  font-size: 0.85rem !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  letter-spacing: 0.01em !important;
+}
+
+.professional-mini-chip {
+  font-weight: 600 !important;
+  font-size: 0.75rem !important;
+  letter-spacing: 0.5px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+}
+
+/* Responsive Professional Cards */
+@media (max-width: 1200px) {
+  .professional-stat-number {
+    font-size: 2.2rem !important;
+  }
+
+  .professional-card-title {
+    font-size: 1rem !important;
+  }
+}
+
+@media (max-width: 960px) {
+  .professional-stat-number {
+    font-size: 2rem !important;
+  }
+
+  .professional-card-title {
+    font-size: 0.95rem !important;
+  }
+
+  .professional-card-subtitle {
+    font-size: 0.85rem !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .professional-stat-number {
+    font-size: 1.8rem !important;
+  }
+
+  .professional-card-title {
+    font-size: 0.9rem !important;
+  }
+
+  .professional-card-subtitle {
+    font-size: 0.8rem !important;
+  }
+}
+
+/* Fast Animation Keyframes */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes bounceIn {
+  from {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  10%,
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: translateX(-5px);
+  }
+  20%,
+  40%,
+  60%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+.auto-fee-slip-card {
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 3px solid rgba(0, 0, 0, 0.6) !important;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  min-height: 200px;
+  height: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  animation: fadeInUp 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.auto-fee-slip-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 1;
+}
+
+.auto-fee-slip-card:hover::before {
+  opacity: 1;
+}
+
+.auto-fee-slip-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 15px 35px rgba(0, 0, 0, 0.5),
+    0 10px 25px rgba(0, 0, 0, 0.4), 0 5px 15px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  border-color: rgba(0, 0, 0, 0.95) !important;
+  border-width: 4px !important;
+  background: rgba(255, 255, 255, 0.5) !important;
+  transition: all 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.auto-fee-slip-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(59, 130, 246, 0.1) 0%,
+    rgba(147, 51, 234, 0.1) 50%,
+    rgba(236, 72, 153, 0.1) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  z-index: 0;
+}
+
+.auto-fee-slip-card:hover .auto-fee-slip-overlay {
+  opacity: 1;
+  transition: opacity 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.auto-fee-slip-icon-avatar {
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(15px);
+  border: 3px solid rgba(0, 0, 0, 0.6);
+  transition: all 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), 0 3px 12px rgba(0, 0, 0, 0.2),
+    0 1px 4px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.auto-fee-slip-icon-avatar:hover {
+  background: rgba(255, 255, 255, 0.5) !important;
+  transform: scale(1.1);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), 0 8px 20px rgba(0, 0, 0, 0.4),
+    0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  border-color: rgba(0, 0, 0, 0.95) !important;
+  border-width: 4px !important;
+  transition: all 0.1s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+}
+
+.auto-fee-slip-text {
+  position: relative;
+  z-index: 2;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.auto-fee-slip-avatar {
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(15px);
+  border: 2px solid rgba(0, 0, 0, 0.4);
+  transition: all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25), 0 3px 12px rgba(0, 0, 0, 0.2),
+    0 1px 4px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.auto-fee-slip-avatar:hover {
+  background: rgba(255, 255, 255, 0.3) !important;
+  transform: scale(1.05);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35), 0 6px 18px rgba(0, 0, 0, 0.25),
+    0 3px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Position relative utility */
+.position-relative {
+  position: relative;
+}
+
+/* Text color utilities for glass effect */
+.text-white-70 {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* Enhanced hover effects for glass cards */
+.auto-fee-slip-card .v-card-text {
+  position: relative;
+  z-index: 2;
+}
+
+.auto-fee-slip-card:hover .auto-fee-slip-icon-avatar {
+  animation: iconFloat 2s ease-in-out infinite;
+}
+
+@keyframes iconFloat {
+  0% {
+    transform: translateY(0px) scale(1);
+  }
+  25% {
+    transform: translateY(-1px) scale(1.01);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.02);
+  }
+  75% {
+    transform: translateY(-1px) scale(1.01);
+  }
+  100% {
+    transform: translateY(0px) scale(1);
+  }
+}
+
+/* Responsive design for glass cards */
+@media (max-width: 1200px) {
+  .auto-fee-slip-card {
+    min-height: 180px;
+  }
+}
+
+/* Welcome text styling */
+.welcome-text {
+  color: white !important;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  font-family: "Playfair Display", serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.5px !important;
+  font-size: 1.25rem !important;
+  line-height: 1.4 !important;
+}
+
+/* Elegant title styling */
+.elegant-title {
+  font-family: "Playfair Display", serif !important;
+  font-weight: 700 !important;
+  letter-spacing: 1px !important;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, #ffffff 0%, #e3f2fd 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.elegant-subtitle {
+  font-family: "Montserrat", sans-serif !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.3px !important;
+  text-transform: uppercase !important;
+  font-size: 0.9rem !important;
+}
+
+.elegant-section-title {
+  font-family: "Playfair Display", serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.8px !important;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Special styling for white text (welcome message) */
+.elegant-section-title.text-white {
+  background: linear-gradient(135deg, #ffffff 0%, #e3f2fd 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Special styling for primary text (section headers) */
+.elegant-section-title.text-primary {
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Special styling for grey-darken-3 text (section headers) */
+.elegant-section-title.text-grey-darken-3 {
+  background: linear-gradient(135deg, #424242 0%, #616161 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+.elegant-card-title {
+  font-family: "Montserrat", sans-serif !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.3px !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 960px) {
+  .auto-fee-slip-card {
+    min-height: 160px;
+  }
+}
+
+@media (max-width: 600px) {
+  .auto-fee-slip-card {
+    min-height: 140px;
+  }
+
+  .auto-fee-slip-icon-avatar {
+    size: 48px !important;
+  }
+
+  .auto-fee-slip-icon-avatar .v-icon {
     font-size: 24px !important;
   }
 }

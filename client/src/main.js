@@ -9,7 +9,13 @@ import "@mdi/font/css/materialdesignicons.css";
 Vue.config.productionTip = false;
 
 // Configure axios defaults
-axios.defaults.baseURL = "http://localhost:8081";
+const apiUrl =
+  process.env.VUE_APP_API_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:8081"
+    : "http://localhost:8081");
+
+axios.defaults.baseURL = apiUrl;
 axios.defaults.headers.common["Content-Type"] = "application/json";
 
 // Add request interceptor to include auth token from cookies

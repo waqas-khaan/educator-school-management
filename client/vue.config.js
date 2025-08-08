@@ -5,5 +5,8 @@ module.exports = defineConfig({
   devServer: {
     historyApiFallback: true,
     port: 8080,
+    host: "localhost",
+    allowedHosts: "all",
+    https: false,
   },
 });

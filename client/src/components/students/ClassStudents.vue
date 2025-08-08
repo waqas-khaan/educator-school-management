@@ -244,12 +244,24 @@
                                 </v-btn>
 
                                 <v-btn
+                                  color="success"
+                                  size="small"
+                                  class="mr-3 action-button export-btn"
+                                  :disabled="selectedStudents.length === 0"
+                                  @click="showExportDialog = true"
+                                  prepend-icon="mdi-download"
+                                  elevation="2"
+                                  rounded
+                                >
+                                  <span class="font-weight-bold">EXPORT</span>
+                                </v-btn>
+
+                                <v-btn
                                   color="warning"
                                   size="small"
                                   class="mr-3 action-button mark-left-btn"
                                   :disabled="selectedStudents.length === 0"
                                   @click="showLeftDialog = true"
-                                  prepend-icon="mdi-logout"
                                   elevation="2"
                                   rounded
                                 >
@@ -265,7 +277,6 @@
                                   :disabled="selectedStudents.length === 0"
                                   :loading="generatingFeeSlips"
                                   @click="generateBulkFeeSlipsMethod"
-                                  prepend-icon="mdi-receipt"
                                   elevation="2"
                                   rounded
                                 >
@@ -365,12 +376,58 @@
                             <div class="text-right">
                               <span class="font-weight-bold primary--text">
                                 ₨{{
-                                  parseFloat(item.monthly_fee).toLocaleString()
+                                  item && item.monthly_fee
+                                    ? parseFloat(
+                                        item.monthly_fee
+                                      ).toLocaleString()
+                                    : "0"
                                 }}
                               </span>
                               <div class="text-caption text-medium-emphasis">
                                 Monthly Fee
                               </div>
+                            </div>
+                          </template>
+
+                          <template v-slot:item.arrears_amount="{ item }">
+                            <div class="text-right">
+                              <span
+                                class="font-weight-bold"
+                                :class="{
+                                  'error--text':
+                                    (parseFloat(item?.arrears_amount) || 0) > 0,
+                                  'success--text':
+                                    (parseFloat(item?.arrears_amount) || 0) ===
+                                    0,
+                                }"
+                              >
+                                ₨{{
+                                  item && item.arrears_amount
+                                    ? parseFloat(
+                                        item.arrears_amount
+                                      ).toLocaleString()
+                                    : "0"
+                                }}
+                              </span>
+                              <div class="text-caption text-medium-emphasis">
+                                Arrears
+                              </div>
+                            </div>
+                          </template>
+
+                          <template v-slot:item.fee_status="{ item }">
+                            <div class="text-center">
+                              <v-chip
+                                :color="getFeeStatusColor(item)"
+                                text-color="white"
+                                small
+                                class="font-weight-medium"
+                              >
+                                <v-icon left x-small>
+                                  {{ getFeeStatusIcon(item) }}
+                                </v-icon>
+                                {{ getFeeStatusText(item) }}
+                              </v-chip>
                             </div>
                           </template>
 
@@ -391,53 +448,7 @@
                                 </template>
                                 <span>View Details</span>
                               </v-tooltip>
-                              <v-tooltip bottom>
-                                <template v-slot:activator="{ on, attrs }">
-                                  <v-btn
-                                    icon
-                                    x-small
-                                    color="orange"
-                                    v-bind="attrs"
-                                    v-on="on"
-                                    @click="editStudent(item)"
-                                    :loading="false"
-                                  >
-                                    <v-icon>mdi-pencil</v-icon>
-                                  </v-btn>
-                                </template>
-                                <span>Edit Student</span>
-                              </v-tooltip>
-                              <v-tooltip bottom>
-                                <template v-slot:activator="{ on, attrs }">
-                                  <v-btn
-                                    icon
-                                    x-small
-                                    color="success"
-                                    v-bind="attrs"
-                                    v-on="on"
-                                    @click.stop="generateFeeSlip(item)"
-                                    :loading="generatingFeeSlip === item.id"
-                                  >
-                                    <v-icon>mdi-receipt</v-icon>
-                                  </v-btn>
-                                </template>
-                                <span>Generate Fee Slip</span>
-                              </v-tooltip>
-                              <v-tooltip bottom>
-                                <template v-slot:activator="{ on, attrs }">
-                                  <v-btn
-                                    icon
-                                    x-small
-                                    color="warning"
-                                    v-bind="attrs"
-                                    v-on="on"
-                                    @click="markStudentLeft(item)"
-                                  >
-                                    <v-icon>mdi-logout</v-icon>
-                                  </v-btn>
-                                </template>
-                                <span>Mark as Left</span>
-                              </v-tooltip>
+
                               <v-tooltip bottom>
                                 <template v-slot:activator="{ on, attrs }">
                                   <v-btn
@@ -509,6 +520,49 @@
                 </v-card-title>
                 <v-card-text>
                   <v-list dense>
+                    <v-list-item>
+                      <template v-slot:prepend>
+                        <v-icon color="primary"
+                          >mdi-card-account-details</v-icon
+                        >
+                      </template>
+                      <v-list-item-title class="font-weight-medium"
+                        >Admission Number</v-list-item-title
+                      >
+                      <v-list-item-subtitle>{{
+                        selectedStudent.admission_number || "Not Assigned"
+                      }}</v-list-item-subtitle>
+                    </v-list-item>
+
+                    <v-list-item>
+                      <template v-slot:prepend>
+                        <v-icon color="primary">mdi-account-check</v-icon>
+                      </template>
+                      <v-list-item-title class="font-weight-medium"
+                        >Status</v-list-item-title
+                      >
+                      <v-list-item-subtitle>
+                        <v-chip
+                          :color="
+                            selectedStudent.status === 'Active'
+                              ? 'success'
+                              : 'warning'
+                          "
+                          text-color="white"
+                          small
+                        >
+                          <v-icon left x-small>
+                            {{
+                              selectedStudent.status === "Active"
+                                ? "mdi-check-circle"
+                                : "mdi-alert-circle"
+                            }}
+                          </v-icon>
+                          {{ selectedStudent.status }}
+                        </v-chip>
+                      </v-list-item-subtitle>
+                    </v-list-item>
+
                     <v-list-item>
                       <template v-slot:prepend>
                         <v-icon color="primary">mdi-account</v-icon>
@@ -632,13 +686,34 @@
                       <v-list-item-title class="font-weight-medium"
                         >Admission Fee</v-list-item-title
                       >
-                      <v-list-item-subtitle
-                        >Rs{{
-                          parseFloat(
-                            selectedStudent.admission_fee || 0
-                          ).toLocaleString()
-                        }}</v-list-item-subtitle
-                      >
+                      <v-list-item-subtitle>
+                        Rs{{
+                          selectedStudent &&
+                          selectedStudent.admission_fee_amount
+                            ? parseFloat(
+                                selectedStudent.admission_fee_amount
+                              ).toLocaleString()
+                            : "0"
+                        }}
+                        <v-chip
+                          v-if="selectedStudent.is_admission_paid"
+                          color="success"
+                          outlined
+                          x-small
+                          class="ml-2"
+                        >
+                          Paid
+                        </v-chip>
+                        <v-chip
+                          v-else-if="selectedStudent.admission_fee_amount > 0"
+                          color="warning"
+                          outlined
+                          x-small
+                          class="ml-2"
+                        >
+                          Unpaid
+                        </v-chip>
+                      </v-list-item-subtitle>
                     </v-list-item>
 
                     <v-list-item>
@@ -650,11 +725,49 @@
                       >
                       <v-list-item-subtitle
                         >Rs{{
-                          parseFloat(
-                            selectedStudent.monthly_fee || 0
-                          ).toLocaleString()
+                          selectedStudent && selectedStudent.monthly_fee
+                            ? parseFloat(
+                                selectedStudent.monthly_fee
+                              ).toLocaleString()
+                            : "0"
                         }}</v-list-item-subtitle
                       >
+                    </v-list-item>
+
+                    <v-list-item>
+                      <template v-slot:prepend>
+                        <v-icon color="primary">mdi-bus</v-icon>
+                      </template>
+                      <v-list-item-title class="font-weight-medium"
+                        >Transport Fee</v-list-item-title
+                      >
+                      <v-list-item-subtitle>
+                        Rs{{
+                          selectedStudent && selectedStudent.transport_fee
+                            ? parseFloat(
+                                selectedStudent.transport_fee
+                              ).toLocaleString()
+                            : "0"
+                        }}
+                        <v-chip
+                          v-if="selectedStudent.transport_fee > 0"
+                          color="success"
+                          outlined
+                          x-small
+                          class="ml-2"
+                        >
+                          Active
+                        </v-chip>
+                        <v-chip
+                          v-else
+                          color="grey"
+                          outlined
+                          x-small
+                          class="ml-2"
+                        >
+                          Inactive
+                        </v-chip>
+                      </v-list-item-subtitle>
                     </v-list-item>
 
                     <v-list-item>
@@ -666,11 +779,32 @@
                       >
                       <v-list-item-subtitle
                         >Rs{{
-                          parseFloat(
-                            selectedStudent.annual_fund || 0
-                          ).toLocaleString()
+                          selectedStudent && selectedStudent.annual_fund
+                            ? parseFloat(
+                                selectedStudent.annual_fund
+                              ).toLocaleString()
+                            : "0"
                         }}</v-list-item-subtitle
                       >
+                    </v-list-item>
+
+                    <v-list-item>
+                      <template v-slot:prepend>
+                        <v-icon color="primary">mdi-calculator</v-icon>
+                      </template>
+                      <v-list-item-title class="font-weight-medium"
+                        >Total Monthly Fee</v-list-item-title
+                      >
+                      <v-list-item-subtitle
+                        class="success--text font-weight-bold"
+                      >
+                        Rs{{
+                          (
+                            parseFloat(selectedStudent.monthly_fee || 0) +
+                            parseFloat(selectedStudent.transport_fee || 0)
+                          ).toLocaleString()
+                        }}
+                      </v-list-item-subtitle>
                     </v-list-item>
                   </v-list>
                 </v-card-text>
@@ -707,11 +841,7 @@
           >
             CLOSE
           </v-btn>
-          <v-btn
-            color="primary"
-            @click="editStudent(selectedStudent)"
-            prepend-icon="mdi-pencil"
-          >
+          <v-btn color="primary" @click="editStudent(selectedStudent)">
             EDIT STUDENT
           </v-btn>
         </v-card-actions>
@@ -736,8 +866,6 @@
                   v-model="editingStudent.name"
                   label="Student Name"
                   outlined
-                  :rules="[(v) => !!v || 'Name is required']"
-                  required
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -745,8 +873,6 @@
                   v-model="editingStudent.father_name"
                   label="Father's Name"
                   outlined
-                  :rules="[(v) => !!v || 'Father\'s name is required']"
-                  required
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -754,8 +880,6 @@
                   v-model="editingStudent.cnic"
                   label="CNIC"
                   outlined
-                  :rules="[(v) => !!v || 'CNIC is required']"
-                  required
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -763,8 +887,6 @@
                   v-model="editingStudent.phone"
                   label="Phone"
                   outlined
-                  :rules="[(v) => !!v || 'Phone is required']"
-                  required
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -773,8 +895,6 @@
                   :items="['Male', 'Female']"
                   label="Gender"
                   outlined
-                  :rules="[(v) => !!v || 'Gender is required']"
-                  required
                   class="promote-class-select"
                 ></v-select>
               </v-col>
@@ -786,8 +906,6 @@
                   item-value="id"
                   label="Class"
                   outlined
-                  :rules="[(v) => !!v || 'Class is required']"
-                  required
                   persistent-hint
                   hint="Select the student's class"
                   @change="onClassSelected"
@@ -834,8 +952,6 @@
                   label="Date of Birth"
                   type="text"
                   outlined
-                  :rules="[(v) => !!v || 'Date of birth is required']"
-                  required
                   placeholder="dd/mm/yyyy"
                 ></v-text-field>
               </v-col>
@@ -845,19 +961,15 @@
                   label="Admission Date"
                   type="text"
                   outlined
-                  :rules="[(v) => !!v || 'Admission date is required']"
-                  required
                   placeholder="dd/mm/yyyy"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
                 <v-text-field
-                  v-model="editingStudent.admission_fee"
+                  v-model="editingStudent.admission_fee_amount"
                   label="Admission Fee"
                   type="number"
                   outlined
-                  :rules="[(v) => !!v || 'Admission fee is required']"
-                  required
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -866,8 +978,14 @@
                   label="Monthly Fee"
                   type="number"
                   outlined
-                  :rules="[(v) => !!v || 'Monthly fee is required']"
-                  required
+                ></v-text-field>
+              </v-col>
+              <v-col cols="12" md="6">
+                <v-text-field
+                  v-model="editingStudent.transport_fee"
+                  label="Transport Fee"
+                  type="number"
+                  outlined
                 ></v-text-field>
               </v-col>
               <v-col cols="12" md="6">
@@ -876,8 +994,6 @@
                   label="Annual Fund"
                   type="number"
                   outlined
-                  :rules="[(v) => !!v || 'Annual fund is required']"
-                  required
                 ></v-text-field>
               </v-col>
               <v-col cols="12">
@@ -886,8 +1002,6 @@
                   label="Address"
                   outlined
                   rows="3"
-                  :rules="[(v) => !!v || 'Address is required']"
-                  required
                 ></v-textarea>
               </v-col>
             </v-row>
@@ -904,12 +1018,7 @@
           >
             Cancel
           </v-btn>
-          <v-btn
-            color="primary"
-            @click="handleSaveClick"
-            :loading="saving"
-            :disabled="!editFormValid"
-          >
+          <v-btn color="primary" @click="handleSaveClick" :loading="saving">
             Save Changes
           </v-btn>
         </v-card-actions>
@@ -1236,24 +1345,53 @@
               Print {{ selectedStudents.length }} Student Records
             </h4>
             <p class="text-body-2 text-medium-emphasis">
-              Generate a detailed report with fee information
+              Select fields to include in the print report
             </p>
           </div>
 
-          <v-alert type="info" class="mb-4">
-            <template v-slot:prepend>
-              <v-icon>mdi-information</v-icon>
-            </template>
-            <div class="text-body-2">
-              <strong>Report includes:</strong>
-              <ul class="mt-2 mb-0">
-                <li>Student personal information</li>
-                <li>Current monthly fees</li>
-                <li>Balance and fine details</li>
-                <li>Total fee calculations</li>
-              </ul>
-            </div>
-          </v-alert>
+          <v-card outlined class="pa-4 mb-4">
+            <div class="text-h6 mb-3">Fee Status Filter</div>
+            <v-row>
+              <v-col cols="12" sm="6">
+                <v-radio-group
+                  v-model="printFeeStatusFilter"
+                  color="info"
+                  hide-details
+                >
+                  <v-radio value="all" label="All Students"></v-radio>
+                  <v-radio value="paid" label="Paid Students Only"></v-radio>
+                  <v-radio
+                    value="unpaid"
+                    label="Unpaid Students Only"
+                  ></v-radio>
+                  <v-radio
+                    value="partial"
+                    label="Partial Payment Students Only"
+                  ></v-radio>
+                </v-radio-group>
+              </v-col>
+            </v-row>
+          </v-card>
+
+          <v-card outlined class="pa-4 mb-4">
+            <div class="text-h6 mb-3">Available Fields</div>
+            <v-row>
+              <v-col
+                cols="12"
+                sm="6"
+                v-for="field in availableFields"
+                :key="field.value"
+              >
+                <v-checkbox
+                  v-model="selectedFields"
+                  :value="field.value"
+                  :label="field.text"
+                  color="info"
+                  hide-details
+                ></v-checkbox>
+              </v-col>
+            </v-row>
+          </v-card>
         </v-card-text>
 
         <v-card-actions class="pa-6 pt-0">
@@ -1273,13 +1411,128 @@
             color="info"
             @click="printStudents"
             :loading="printing"
-            :disabled="printing"
+            :disabled="printing || selectedFields.length === 0"
             class="px-6 action-btn"
             rounded
             elevation="2"
           >
             <v-icon left>mdi-printer</v-icon>
-            Print Records
+            Print Records ({{ selectedFields.length }} fields)
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Export Students Dialog -->
+    <v-dialog v-model="showExportDialog" max-width="500" persistent>
+      <v-card class="print-dialog-card" elevation="24" rounded="xl">
+        <v-card-title class="print-dialog-header pa-6">
+          <div class="d-flex align-center">
+            <v-avatar size="48" color="success" class="mr-4">
+              <v-icon size="24" color="white">mdi-download</v-icon>
+            </v-avatar>
+            <div>
+              <h3 class="text-h5 font-weight-bold white--text mb-1">
+                Export Student Records
+              </h3>
+              <p class="text-subtitle-2 white--text opacity-80">
+                Generate CSV export
+              </p>
+            </div>
+          </div>
+          <v-btn
+            icon
+            dark
+            @click="showExportDialog = false"
+            class="close-btn"
+            :disabled="exporting"
+          >
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <div class="text-center mb-6">
+            <v-icon size="64" color="success" class="mb-3"
+              >mdi-file-excel</v-icon
+            >
+            <h4 class="text-h6 font-weight-bold mb-3">
+              Export {{ selectedStudents.length }} Student Records
+            </h4>
+            <p class="text-body-2 text-medium-emphasis">
+              Select fields to include in the CSV export
+            </p>
+          </div>
+
+          <v-card outlined class="pa-4 mb-4">
+            <div class="text-h6 mb-3">Fee Status Filter</div>
+            <v-row>
+              <v-col cols="12" sm="6">
+                <v-radio-group
+                  v-model="exportFeeStatusFilter"
+                  color="success"
+                  hide-details
+                >
+                  <v-radio value="all" label="All Students"></v-radio>
+                  <v-radio value="paid" label="Paid Students Only"></v-radio>
+                  <v-radio
+                    value="unpaid"
+                    label="Unpaid Students Only"
+                  ></v-radio>
+                  <v-radio
+                    value="partial"
+                    label="Partial Payment Students Only"
+                  ></v-radio>
+                </v-radio-group>
+              </v-col>
+            </v-row>
+          </v-card>
+
+          <v-card outlined class="pa-4 mb-4">
+            <div class="text-h6 mb-3">Available Fields</div>
+            <v-row>
+              <v-col
+                cols="12"
+                sm="6"
+                v-for="field in availableFields"
+                :key="field.value"
+              >
+                <v-checkbox
+                  v-model="selectedExportFields"
+                  :value="field.value"
+                  :label="field.text"
+                  color="success"
+                  hide-details
+                ></v-checkbox>
+              </v-col>
+            </v-row>
+          </v-card>
+        </v-card-text>
+
+        <v-card-actions class="pa-6 pt-0">
+          <v-spacer></v-spacer>
+          <v-btn
+            outlined
+            color="grey"
+            @click="showExportDialog = false"
+            :disabled="exporting"
+            class="px-6 action-btn"
+            rounded
+          >
+            <v-icon left>mdi-close</v-icon>
+            Cancel
+          </v-btn>
+          <v-btn
+            color="success"
+            @click="performBulkExport"
+            :loading="exporting"
+            :disabled="selectedExportFields.length === 0"
+            class="px-6 action-btn"
+            rounded
+            elevation="2"
+          >
+            <v-icon left>mdi-download</v-icon>
+            Export ({{ selectedExportFields.length }} fields)
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -1291,7 +1544,7 @@
         <v-card-title class="left-dialog-header pa-6">
           <div class="d-flex align-center">
             <v-avatar size="48" color="warning" class="mr-4">
-              <v-icon size="24" color="white">mdi-logout</v-icon>
+              <v-icon size="24" color="white">mdi-account-remove</v-icon>
             </v-avatar>
             <div>
               <h3 class="text-h5 font-weight-bold white--text mb-1">
@@ -1360,7 +1613,7 @@
             rounded
             elevation="2"
           >
-            <v-icon left>mdi-logout</v-icon>
+            <v-icon left>mdi-account-remove</v-icon>
             Mark as Left
           </v-btn>
         </v-card-actions>
@@ -1368,94 +1621,30 @@
     </v-dialog>
 
     <!-- Fee Slip Dialog -->
-    <v-dialog v-model="showFeeSlipDialogFlag" max-width="600" persistent>
+    <v-dialog v-model="showFeeSlipDialogFlag" max-width="800" persistent>
       <v-card>
         <v-card-title class="text-h5 primary white--text">
-          <v-icon left>mdi-receipt</v-icon>
-          Fee Slip Details
+          Fee Slip Preview
         </v-card-title>
 
         <v-card-text v-if="selectedFeeSlip" class="pt-4">
           <v-row>
             <v-col cols="12">
-              <h3 class="text-h6 mb-3">Student Information</h3>
-              <v-list dense>
-                <v-list-item>
-                  <v-list-item-content>
-                    <v-list-item-title
-                      ><strong>Name:</strong>
-                      {{ selectedFeeSlip.student_name }}</v-list-item-title
-                    >
-                  </v-list-item-content>
-                </v-list-item>
-                <v-list-item>
-                  <v-list-item-content>
-                    <v-list-item-title
-                      ><strong>Admission Number:</strong>
-                      {{ selectedFeeSlip.admission_number }}</v-list-item-title
-                    >
-                  </v-list-item-content>
-                </v-list-item>
-                <v-list-item>
-                  <v-list-item-content>
-                    <v-list-item-title
-                      ><strong>Father's Name:</strong>
-                      {{ selectedFeeSlip.father_name }}</v-list-item-title
-                    >
-                  </v-list-item-content>
-                </v-list-item>
-                <v-list-item>
-                  <v-list-item-content>
-                    <v-list-item-title
-                      ><strong>Class:</strong>
-                      {{ selectedFeeSlip.class_name }}</v-list-item-title
-                    >
-                  </v-list-item-content>
-                </v-list-item>
-              </v-list>
-            </v-col>
-          </v-row>
-
-          <v-divider class="my-4"></v-divider>
-
-          <v-divider class="my-4"></v-divider>
-
-          <v-row>
-            <v-col cols="12">
-              <div class="text-right">
-                <h3 class="text-h5 primary--text">
-                  <strong
-                    >Total Amount: Rs.
-                    {{
-                      parseFloat(
-                        selectedFeeSlip.remaining_balance ||
-                          selectedFeeSlip.total_amount ||
-                          0
-                      ).toFixed(2)
-                    }}</strong
-                  >
-                </h3>
-                <p class="text-caption mt-2">
-                  <strong>Due Date:</strong>
-                  {{ new Date(selectedFeeSlip.due_date).toLocaleDateString() }}
-                </p>
-                <p class="text-caption">
-                  <strong>Slip Number:</strong> {{ selectedFeeSlip.slip_id }}
-                </p>
-                <p class="text-caption">
-                  <strong>Barcode:</strong>
-                  {{ selectedFeeSlip.barcode || selectedFeeSlip.slip_id }}
-                </p>
-                <div class="barcode-container mt-3">
-                  <div class="barcode-text">
-                    {{ selectedFeeSlip.barcode || selectedFeeSlip.slip_id }}
-                  </div>
-                  <canvas
-                    :id="'barcode-' + selectedFeeSlip.slip_id"
-                    class="barcode-canvas"
-                    width="300"
-                    height="80"
-                  ></canvas>
+              <div style="height: 600px; border: 1px solid #ddd">
+                <iframe
+                  v-if="selectedFeeSlip.id"
+                  :src="`http://localhost:8081/api/fee-slips/${selectedFeeSlip.id}/pdf-with-barcode`"
+                  width="100%"
+                  height="100%"
+                  frameborder="0"
+                  style="border: none"
+                ></iframe>
+                <div v-else class="text-center pa-8">
+                  <v-icon size="64" color="grey">mdi-file-pdf-box</v-icon>
+                  <p class="text-h6 mt-4">Fee slip data available</p>
+                  <p class="text-body-2">
+                    Click "Generate PDF" to view the new design
+                  </p>
                 </div>
               </div>
             </v-col>
@@ -1467,126 +1656,13 @@
           <v-btn color="primary" @click="showFeeSlipDialogFlag = false">
             Close
           </v-btn>
+          <v-btn color="info" @click="generateFeeSlipWithBarcode">
+            <v-icon left>mdi-file-pdf-box</v-icon>
+            Generate PDF
+          </v-btn>
           <v-btn color="success" @click="printFeeSlip">
             <v-icon left>mdi-printer</v-icon>
             Print
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <!-- Bulk Fee Slip Summary Dialog -->
-    <v-dialog v-model="showBulkSummaryDialog" max-width="800" persistent>
-      <v-card>
-        <v-card-title class="text-h5 primary white--text">
-          <v-icon left>mdi-receipt-multiple</v-icon>
-          Bulk Fee Slip Generation Summary
-        </v-card-title>
-
-        <v-card-text class="pt-4">
-          <v-row>
-            <v-col cols="12">
-              <h3 class="text-h6 mb-3">Generation Results</h3>
-
-              <!-- Successful Generations -->
-              <div
-                v-if="bulkFeeSlipResults.filter((r) => r.success).length > 0"
-                class="mb-4"
-              >
-                <h4 class="text-subtitle-1 success--text mb-2">
-                  ✅ Successfully Generated ({{
-                    bulkFeeSlipResults.filter((r) => r.success).length
-                  }})
-                </h4>
-                <v-list dense>
-                  <v-list-item
-                    v-for="result in bulkFeeSlipResults.filter(
-                      (r) => r.success
-                    )"
-                    :key="result.studentId"
-                  >
-                    <v-list-item-content>
-                      <v-list-item-title>
-                        <strong>{{ result.student }}</strong>
-                        <v-chip
-                          x-small
-                          color="info"
-                          class="ml-2"
-                          v-if="result.exists"
-                        >
-                          Already Existed
-                        </v-chip>
-                        <v-chip x-small color="success" class="ml-2" v-else>
-                          Newly Generated
-                        </v-chip>
-                      </v-list-item-title>
-                      <v-list-item-subtitle v-if="result.feeSlip">
-                        Total: Rs.
-                        {{ parseFloat(result.feeSlip.total_amount).toFixed(2) }}
-                        | Slip: {{ result.feeSlip.slip_id }}
-                      </v-list-item-subtitle>
-                    </v-list-item-content>
-                    <v-list-item-action>
-                      <v-btn
-                        x-small
-                        color="primary"
-                        @click="showFeeSlipDialog(result.feeSlip)"
-                        v-if="result.feeSlip"
-                      >
-                        View
-                      </v-btn>
-                    </v-list-item-action>
-                  </v-list-item>
-                </v-list>
-              </div>
-
-              <!-- Failed Generations -->
-              <div
-                v-if="bulkFeeSlipResults.filter((r) => !r.success).length > 0"
-                class="mb-4"
-              >
-                <h4 class="text-subtitle-1 error--text mb-2">
-                  ❌ Failed to Generate ({{
-                    bulkFeeSlipResults.filter((r) => !r.success).length
-                  }})
-                </h4>
-                <v-list dense>
-                  <v-list-item
-                    v-for="result in bulkFeeSlipResults.filter(
-                      (r) => !r.success
-                    )"
-                    :key="result.studentId"
-                  >
-                    <v-list-item-content>
-                      <v-list-item-title>
-                        <strong>{{ result.student }}</strong>
-                      </v-list-item-title>
-                      <v-list-item-subtitle class="error--text">
-                        {{ result.error }}
-                      </v-list-item-subtitle>
-                    </v-list-item-content>
-                  </v-list-item>
-                </v-list>
-              </div>
-            </v-col>
-          </v-row>
-        </v-card-text>
-
-        <v-card-actions>
-          <v-spacer></v-spacer>
-          <v-btn color="primary" @click="showBulkSummaryDialog = false">
-            Close
-          </v-btn>
-          <v-btn
-            color="success"
-            @click="printAllFeeSlips"
-            :disabled="
-              bulkFeeSlipResults.filter((r) => r.success && r.feeSlip)
-                .length === 0
-            "
-          >
-            <v-icon left>mdi-printer</v-icon>
-            Print All
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -1644,6 +1720,7 @@
 <script>
 import axios from "axios";
 import JsBarcode from "jsbarcode";
+import { getAuthData } from "@/utils/cookies";
 
 export default {
   name: "ClassStudents",
@@ -1659,6 +1736,7 @@ export default {
       showDeleteDialog: false,
       showPromoteDialog: false,
       showPrintDialog: false,
+      showExportDialog: false,
       showLeftDialog: false,
       selectedStudent: null,
       editingStudent: null,
@@ -1670,14 +1748,34 @@ export default {
       deleting: false,
       promoting: false,
       printing: false,
+      exporting: false,
       markingLeft: false,
       generatingFeeSlip: null,
       generatingFeeSlips: false,
       selectedStudents: [],
+      selectedFields: [],
+      selectedExportFields: [],
+      printFeeStatusFilter: "all",
+      exportFeeStatusFilter: "all",
+      availableFields: [
+        { text: "Student Name", value: "name" },
+        { text: "Admission Number", value: "admission_number" },
+        { text: "Father's Name", value: "father_name" },
+        { text: "CNIC", value: "cnic" },
+        { text: "Phone", value: "phone" },
+        { text: "Gender", value: "gender" },
+        { text: "Class", value: "class_name" },
+        { text: "Date of Birth", value: "date_of_birth" },
+        { text: "Admission Date", value: "admission_date" },
+        { text: "Monthly Fee", value: "monthly_fee" },
+        { text: "Fee Status", value: "fee_status" },
+        { text: "Address", value: "address" },
+      ],
       allClasses: [],
       showFeeSlipDialogFlag: false,
       selectedFeeSlip: null,
-      showBulkSummaryDialog: false,
+      feeStatusData: null,
+
       bulkFeeSlipResults: [],
       bulkConfirmDialog: {
         show: false,
@@ -1709,6 +1807,18 @@ export default {
           align: "right",
           width: "150px",
         },
+        {
+          text: "Arrears",
+          value: "arrears_amount",
+          align: "right",
+          width: "150px",
+        },
+        {
+          text: "Fee Status",
+          value: "fee_status",
+          align: "center",
+          width: "120px",
+        },
         { text: "Actions", value: "actions", sortable: false, width: "120px" },
       ],
     };
@@ -1720,18 +1830,29 @@ export default {
       console.log("URL className:", className);
       console.log("Available classes:", this.allClasses);
 
-      // First try exact match
+      // First try exact match (case insensitive)
       let classItem = this.allClasses.find(
         (cls) => cls.name.toLowerCase() === className.toLowerCase()
       );
 
-      // If not found, try partial match
+      // If not found, try partial match (case insensitive)
       if (!classItem) {
         classItem = this.allClasses.find(
           (cls) =>
             cls.name.toLowerCase().includes(className.toLowerCase()) ||
             className.toLowerCase().includes(cls.name.toLowerCase())
         );
+      }
+
+      // If still not found, try matching just the class number and color
+      if (!classItem) {
+        const urlParts = className.toLowerCase().split(" ");
+        classItem = this.allClasses.find((cls) => {
+          const clsParts = cls.name.toLowerCase().split(" ");
+          return urlParts.every((part) =>
+            clsParts.some((clsPart) => clsPart.includes(part))
+          );
+        });
       }
 
       console.log("Found classItem:", classItem);
@@ -1747,7 +1868,8 @@ export default {
 
       let filtered = this.students.filter(
         (student) =>
-          student.class_id == this.classId && student.status === "Active"
+          (this.classId ? student.class_id == this.classId : true) &&
+          student.status === "Active"
       );
       console.log("Students after class and status filter:", filtered);
 
@@ -1818,9 +1940,38 @@ export default {
     await this.loadStudents();
     console.log("Students loaded, now loading class info...");
     await this.loadClassInfo();
+    console.log("Class info loaded, now loading fee status...");
+    await this.loadFeeStatus();
     console.log("All data loaded successfully!");
   },
   methods: {
+    // Load fee status for students in this class
+    async loadFeeStatus() {
+      if (!this.classId) {
+        console.log("No class ID available, skipping fee status load");
+        return;
+      }
+
+      try {
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+
+        const response = await axios.get(
+          `/api/students/classes/${this.classId}/fee-status`,
+          { headers }
+        );
+
+        this.feeStatusData = response.data;
+        console.log("Fee status loaded:", this.feeStatusData);
+      } catch (error) {
+        console.error("Error loading fee status:", error);
+        this.feeStatusData = null;
+      }
+    },
+
     // Fee slip generation methods
     async generateFeeSlip(student) {
       console.log("generateFeeSlip called with student:", student);
@@ -1843,25 +1994,25 @@ export default {
 
         console.log("User token:", user.token);
         console.log("Student ID:", student.id);
-        console.log(
-          "Backend URL: http://localhost:8081/api/fee-slips/generate"
-        );
-
         const currentDate = new Date();
         const month = currentDate.getMonth() + 1;
         const year = currentDate.getFullYear();
 
-        console.log(`Generating fee slip for month: ${month}, year: ${year}`);
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
         const response = await axios.post(
-          "http://localhost:8081/api/fee-slips/generate",
+          "/api/fee-slips/generate",
           {
             student_id: student.id,
             month: month,
             year: year,
           },
           {
-            headers: { Authorization: user.token },
+            headers: headers,
           }
         );
 
@@ -1894,9 +2045,9 @@ export default {
           // Only call PDF endpoint if slip_id is available (old structure)
           console.log("⚠️ No feeSlip data, calling PDF endpoint");
           const feeSlipResponse = await axios.get(
-            `http://localhost:8081/api/fee-slips/${response.data.slip_id}/pdf`,
+            `/api/fee-slips/${response.data.slip_id}/pdf`,
             {
-              headers: { Authorization: user.token },
+              headers: headers,
             }
           );
           console.log(
@@ -1913,8 +2064,48 @@ export default {
 
         console.log("🔍 Frontend Debug - Final feeSlipData:", feeSlipData);
 
-        // Display fee slip data in a dialog
-        this.showFeeSlipDialog(feeSlipData);
+        // Generate PDF with barcode design
+        if (feeSlipData && feeSlipData.id) {
+          try {
+            // Open PDF in new tab for browser display
+            const pdfUrl = `http://localhost:8081/api/fee-slips/${feeSlipData.id}/pdf-with-barcode`;
+            window.open(pdfUrl, "_blank");
+
+            this.$toast.success("Fee slip PDF opened in new tab!");
+          } catch (pdfError) {
+            console.error("Error generating PDF with barcode:", pdfError);
+            // Fallback to showing dialog
+            this.showFeeSlipDialog(feeSlipData);
+          }
+        } else if (feeSlipData && feeSlipData.slip_id) {
+          // If we have slip_id but no id, try to get the fee slip by slip_id
+          try {
+            const authData = getAuthData();
+            const headers =
+              authData && authData.token
+                ? { Authorization: `Bearer ${authData.token}` }
+                : {};
+
+            const feeSlipResponse = await axios.get(
+              `/api/fee-slips/slip/${feeSlipData.slip_id}`,
+              { headers: headers }
+            );
+
+            if (feeSlipResponse.data && feeSlipResponse.data.id) {
+              const pdfUrl = `http://localhost:8081/api/fee-slips/${feeSlipResponse.data.id}/pdf-with-barcode`;
+              window.open(pdfUrl, "_blank");
+              this.$toast.success("Fee slip PDF opened in new tab!");
+            } else {
+              this.showFeeSlipDialog(feeSlipData);
+            }
+          } catch (error) {
+            console.error("Error getting fee slip by slip_id:", error);
+            this.showFeeSlipDialog(feeSlipData);
+          }
+        } else {
+          // Display fee slip data in a dialog as fallback
+          this.showFeeSlipDialog(feeSlipData);
+        }
       } catch (error) {
         console.error("Error generating fee slip:", error);
         console.error("Error details:", error.response?.data);
@@ -1925,6 +2116,13 @@ export default {
           errorMessage = error.response.data.error;
         } else if (error.message) {
           errorMessage = error.message;
+        }
+
+        // Check if it's an authentication error
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          this.$toast.error("Authentication failed. Please log in again.");
+          // Don't redirect, just show error
+          return;
         }
 
         if (errorMessage.includes("already exists")) {
@@ -1955,14 +2153,6 @@ export default {
       );
 
       this.showFeeSlipDialogFlag = true;
-      // Generate barcode after dialog is shown
-      this.$nextTick(() => {
-        if (feeSlip.slip_id) {
-          this.generateBarcode(feeSlip.slip_id);
-        } else {
-          console.warn("⚠️ No slip_id found in fee slip data");
-        }
-      });
     },
 
     generateBarcode(slipId) {
@@ -1983,12 +2173,7 @@ export default {
       }
     },
 
-    showBulkFeeSlipSummary(results) {
-      this.bulkFeeSlipResults = results;
-      this.showBulkSummaryDialog = true;
-    },
-
-    printAllFeeSlips() {
+    async printAllFeeSlips() {
       const successfulFeeSlips = this.bulkFeeSlipResults.filter(
         (r) => r.success && r.feeSlip
       );
@@ -1997,167 +2182,37 @@ export default {
         return;
       }
 
-      const printWindow = window.open("", "_blank");
-      let content = `
-        <html>
-          <head>
-            <title>Bulk Fee Slips - The Educator School</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              .header { text-align: center; margin-bottom: 30px; }
-              .fee-slip { page-break-after: always; margin-bottom: 40px; border: 1px solid #ddd; padding: 20px; }
-              .fee-slip:last-child { page-break-after: avoid; }
-              .section { margin-bottom: 20px; }
-              .total { text-align: right; font-size: 18px; font-weight: bold; margin-top: 20px; }
-              .footer { margin-top: 30px; text-align: center; font-size: 12px; }
-              table { width: 100%; border-collapse: collapse; }
-              th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-            </style>
-          </head>
-          <body>
-      `;
+      // Use the new bulk educators endpoint
+      try {
+        const studentIds = successfulFeeSlips.map((result) => result.studentId);
 
-      successfulFeeSlips.forEach((result) => {
-        const feeSlip = result.feeSlip;
-        content += `
-          <div class="fee-slip">
-            <div class="header">
-              <h1>The Educator School</h1>
-              <h2>Fee Slip</h2>
-            </div>
+        // Use axios to POST the student IDs to the bulk educators endpoint
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
-            <div class="section">
-              <h3>Student Information</h3>
-              <table>
-                <tr><td><strong>Name:</strong></td><td>${
-                  feeSlip.student_name
-                }</td></tr>
-                <tr><td><strong>Admission Number:</strong></td><td>${
-                  feeSlip.admission_number
-                }</td></tr>
-                <tr><td><strong>Father's Name:</strong></td><td>${
-                  feeSlip.father_name
-                }</td></tr>
-                <tr><td><strong>Class:</strong></td><td>${
-                  feeSlip.class_name
-                }</td></tr>
-              </table>
-            </div>
+        // Make the POST request to get the PDF
+        const response = await axios.post(
+          "/api/fee-slips/bulk-educators",
+          { student_ids: studentIds },
+          {
+            headers: headers,
+            responseType: "blob", // Important for PDF download
+          }
+        );
 
+        // Create blob URL and open in new tab
+        const blob = new Blob([response.data], { type: "application/pdf" });
+        const url = window.URL.createObjectURL(blob);
+        window.open(url, "_blank");
 
-
-            <div class="section">
-                                <h3>${new Date(
-                                  feeSlip.year,
-                                  feeSlip.month - 1
-                                ).toLocaleString("default", {
-                                  month: "long",
-                                })} Payment Status</h3>
-              <table>
-                <tr><td><strong>Total Monthly Fee:</strong></td><td>Rs. ${parseFloat(
-                  feeSlip.current_month_expected || 0
-                ).toFixed(2)}</td></tr>
-                <tr><td><strong>${new Date(
-                  feeSlip.year,
-                  feeSlip.month - 1
-                ).toLocaleString("default", {
-                  month: "long",
-                })} Paid:</strong></td><td>Rs. ${parseFloat(
-          feeSlip.current_month_paid || 0
-        ).toFixed(2)}</td></tr>
-                
-                ${
-                  parseFloat(feeSlip.arrears_amount || 0) > 0
-                    ? `<tr><td><strong>Arrears:</strong></td><td>Rs. ${parseFloat(
-                        feeSlip.arrears_amount || 0
-                      ).toFixed(2)}</td></tr>`
-                    : ""
-                }
-                ${
-                  feeSlip.is_past_due_date
-                    ? `<tr><td><strong>⚠️ Past Due Date:</strong></td><td>Auto-arrears applied</td></tr>`
-                    : ""
-                }
-                ${
-                  feeSlip.auto_arrears_added
-                    ? `<tr><td><strong>🔄 Auto-Arrears:</strong></td><td>Previous balance moved to arrears</td></tr>`
-                    : ""
-                }
-              </table>
-            </div>
-
-            <div class="total">
-              <strong>Total Amount: Rs. ${parseFloat(
-                feeSlip.remaining_balance || feeSlip.total_amount || 0
-              ).toFixed(2)}</strong>
-            </div>
-
-            <div class="footer">
-              <p><strong>Due Date:</strong> ${new Date(
-                feeSlip.due_date
-              ).toLocaleDateString()}</p>
-                              <p><strong>Slip Number:</strong> ${
-                                feeSlip.slip_id
-                              }</p>
-                <p><strong>Barcode:</strong> ${
-                  feeSlip.barcode || feeSlip.slip_id
-                }</p>
-                <div style="text-align: center; margin: 15px 0; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9;">
-                  <div style="font-family: 'Courier New', monospace; font-size: 12px; font-weight: bold; margin-bottom: 8px;">${
-                    feeSlip.barcode || feeSlip.slip_id
-                  }</div>
-                  <canvas id="print-barcode-${
-                    feeSlip.slip_id
-                  }" width="300" height="60" style="border: 1px solid #ddd; background: white;"></canvas>
-                </div>
-                <p>Generated on: ${new Date().toLocaleString()}</p>
-            </div>
-          </div>
-        `;
-      });
-
-      content += `
-          </body>
-        </html>
-      `;
-
-      printWindow.document.write(content);
-      printWindow.document.close();
-
-      // Generate barcodes in print window
-      printWindow.onload = () => {
-        try {
-          // Import JsBarcode in the print window
-          const script = printWindow.document.createElement("script");
-          script.src =
-            "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js";
-          script.onload = () => {
-            // Generate barcode for each fee slip
-            this.bulkFeeSlipResults.forEach((result) => {
-              if (result.success && result.feeSlip) {
-                const canvas = printWindow.document.getElementById(
-                  `print-barcode-${result.feeSlip.slip_id}`
-                );
-                if (canvas) {
-                  printWindow.JsBarcode(canvas, result.feeSlip.slip_id, {
-                    format: "CODE128",
-                    width: 2,
-                    height: 50,
-                    displayValue: true,
-                    fontSize: 14,
-                    margin: 10,
-                  });
-                }
-              }
-            });
-            printWindow.print();
-          };
-          printWindow.document.head.appendChild(script);
-        } catch (error) {
-          console.error("Error generating barcodes in print:", error);
-          printWindow.print();
-        }
-      };
+        this.$toast.success("THE EDUCATORS Bulk Fee Slips opened in new tab!");
+      } catch (error) {
+        console.error("Error opening bulk fee slips:", error);
+        this.$toast.error("Failed to open bulk fee slips");
+      }
     },
 
     printFeeSlip() {
@@ -2166,156 +2221,51 @@ export default {
         this.selectedFeeSlip
       );
 
-      if (this.selectedFeeSlip) {
-        const printWindow = window.open("", "_blank");
-        const content = `
-          <html>
-            <head>
-              <title>Fee Slip - ${this.selectedFeeSlip.student_name}</title>
-              <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .section { margin-bottom: 20px; }
-                .fee-breakdown { margin: 20px 0; }
-                .total { text-align: right; font-size: 18px; font-weight: bold; margin-top: 20px; }
-                .footer { margin-top: 30px; text-align: center; font-size: 12px; }
-                table { width: 100%; border-collapse: collapse; }
-                th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-              </style>
-            </head>
-            <body>
-              <div class="header">
-                <h1>The Educator School</h1>
-                <h2>Fee Slip</h2>
-              </div>
+      if (!this.selectedFeeSlip || !this.selectedFeeSlip.id) {
+        console.error("Invalid fee slip data:", this.selectedFeeSlip);
+        this.$toast.error("Invalid fee slip data");
+        return;
+      }
 
-              <div class="section">
-                <h3>Student Information</h3>
-                <table>
-                  <tr><td><strong>Name:</strong></td><td>${
-                    this.selectedFeeSlip.student_name
-                  }</td></tr>
-                  <tr><td><strong>Admission Number:</strong></td><td>${
-                    this.selectedFeeSlip.admission_number
-                  }</td></tr>
-                  <tr><td><strong>Father's Name:</strong></td><td>${
-                    this.selectedFeeSlip.father_name
-                  }</td></tr>
-                  <tr><td><strong>Class:</strong></td><td>${
-                    this.selectedFeeSlip.class_name
-                  }</td></tr>
-                </table>
-              </div>
+      try {
+        // Open THE EDUCATORS PDF in new tab for browser display
+        const pdfUrl = `/api/fee-slips/${this.selectedFeeSlip.id}/pdf-educators`;
+        window.open(pdfUrl, "_blank");
 
+        this.$toast.success("THE EDUCATORS Fee slip PDF opened in new tab!");
+      } catch (error) {
+        console.error("Error generating PDF:", error);
+        this.$toast.error("Failed to generate PDF");
+      }
+    },
 
+    generateFeeSlipWithBarcode() {
+      console.log(
+        "🔍 Frontend Debug - generateFeeSlipWithBarcode using selectedFeeSlip:",
+        this.selectedFeeSlip
+      );
 
-              <div class="section">
-                <h3>${new Date(feeSlip.year, feeSlip.month - 1).toLocaleString(
-                  "default",
-                  { month: "long" }
-                )} Payment Status</h3>
-                <table>
-                  <tr><td><strong>Total Monthly Fee:</strong></td><td>Rs. ${parseFloat(
-                    this.selectedFeeSlip.current_month_expected || 0
-                  ).toFixed(2)}</td></tr>
-                  <tr><td><strong>${new Date(
-                    this.selectedFeeSlip.year,
-                    this.selectedFeeSlip.month - 1
-                  ).toLocaleString("default", {
-                    month: "long",
-                  })} Paid:</strong></td><td>Rs. ${parseFloat(
-          this.selectedFeeSlip.current_month_paid || 0
-        ).toFixed(2)}</td></tr>
-                 
-                  ${
-                    parseFloat(this.selectedFeeSlip.arrears_amount || 0) > 0
-                      ? `<tr><td><strong>Arrears:</strong></td><td>Rs. ${parseFloat(
-                          this.selectedFeeSlip.arrears_amount || 0
-                        ).toFixed(2)}</td></tr>`
-                      : ""
-                  }
-                  ${
-                    this.selectedFeeSlip.is_past_due_date
-                      ? `<tr><td><strong>⚠️ Past Due Date:</strong></td><td>Auto-arrears applied</td></tr>`
-                      : ""
-                  }
-                  ${
-                    this.selectedFeeSlip.auto_arrears_added
-                      ? `<tr><td><strong>🔄 Auto-Arrears:</strong></td><td>Previous balance moved to arrears</td></tr>`
-                      : ""
-                  }
-                </table>
-              </div>
+      if (!this.selectedFeeSlip || !this.selectedFeeSlip.id) {
+        console.error("Invalid fee slip data:", this.selectedFeeSlip);
+        this.$toast.error("Invalid fee slip data");
+        return;
+      }
 
-              <div class="total">
-                <strong>Total Amount: Rs. ${parseFloat(
-                  this.selectedFeeSlip.remaining_balance ||
-                    this.selectedFeeSlip.total_amount ||
-                    0
-                ).toFixed(2)}</strong>
-              </div>
+      try {
+        // Open THE EDUCATORS PDF in new tab for browser display
+        const pdfUrl = `/api/fee-slips/${this.selectedFeeSlip.id}/pdf-educators`;
+        window.open(pdfUrl, "_blank");
 
-              <div class="footer">
-                <p><strong>Due Date:</strong> ${new Date(
-                  this.selectedFeeSlip.due_date
-                ).toLocaleDateString()}</p>
-                <p><strong>Slip Number:</strong> ${
-                  this.selectedFeeSlip.slip_id
-                }</p>
-                <p><strong>Barcode:</strong> ${
-                  this.selectedFeeSlip.barcode || this.selectedFeeSlip.slip_id
-                }</p>
-                <div style="text-align: center; margin: 20px 0; padding: 15px; border: 1px solid #ccc; background-color: #f9f9f9;">
-                  <div style="font-family: 'Courier New', monospace; font-size: 14px; font-weight: bold; margin-bottom: 10px;">${
-                    this.selectedFeeSlip.barcode || this.selectedFeeSlip.slip_id
-                  }</div>
-                  <canvas id="print-single-barcode-${
-                    this.selectedFeeSlip.slip_id
-                  }" width="300" height="60" style="border: 1px solid #ddd; background: white;"></canvas>
-                </div>
-                <p>Generated on: ${new Date().toLocaleString()}</p>
-              </div>
-            </body>
-          </html>
-        `;
-        printWindow.document.write(content);
-        printWindow.document.close();
-
-        // Generate barcode in print window
-        printWindow.onload = () => {
-          try {
-            const canvas = printWindow.document.getElementById(
-              `print-single-barcode-${this.selectedFeeSlip.slip_id}`
-            );
-            if (canvas) {
-              // Import JsBarcode in the print window
-              const script = printWindow.document.createElement("script");
-              script.src =
-                "https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js";
-              script.onload = () => {
-                printWindow.JsBarcode(canvas, this.selectedFeeSlip.slip_id, {
-                  format: "CODE128",
-                  width: 2,
-                  height: 50,
-                  displayValue: true,
-                  fontSize: 14,
-                  margin: 10,
-                });
-                printWindow.print();
-              };
-              printWindow.document.head.appendChild(script);
-            } else {
-              printWindow.print();
-            }
-          } catch (error) {
-            console.error("Error generating barcode in print:", error);
-            printWindow.print();
-          }
-        };
+        this.$toast.success("THE EDUCATORS Fee slip PDF opened in new tab!");
+      } catch (error) {
+        console.error("Error generating PDF with barcode:", error);
+        this.$toast.error("Failed to generate PDF");
       }
     },
 
     async generateBulkFeeSlipsMethod() {
+      console.log("🔍 generateBulkFeeSlipsMethod called");
+
       if (this.selectedStudents.length === 0) {
         this.$toast.error("Please select students to generate fee slips");
         return;
@@ -2323,8 +2273,10 @@ export default {
 
       this.generatingFeeSlips = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        if (!user || !user.token) {
+        const authData = getAuthData();
+        console.log("🔍 Auth data:", authData);
+
+        if (!authData || !authData.token) {
           this.$toast.error("Please log in to generate fee slips");
           return;
         }
@@ -2333,7 +2285,7 @@ export default {
           `Generating fee slips for ${this.selectedStudents.length} students`
         );
 
-        // Generate fee slips for each selected student
+        // First, generate fee slips for each selected student
         const promises = this.selectedStudents.map(async (student) => {
           try {
             const currentDate = new Date();
@@ -2346,76 +2298,233 @@ export default {
               type: typeof student.id,
             });
 
+            const authData = getAuthData();
+            const headers =
+              authData && authData.token
+                ? { Authorization: `Bearer ${authData.token}` }
+                : {};
+
+            console.log("🔍 Making API call for student:", student.id);
+            console.log("🔍 Request payload:", {
+              student_id: student.id,
+              month: month,
+              year: year,
+            });
             const response = await axios.post(
-              "http://localhost:8081/api/fee-slips/generate",
+              "/api/fee-slips/generate",
               {
                 student_id: student.id,
                 month: month,
                 year: year,
               },
               {
-                headers: { Authorization: user.token },
+                headers: headers,
               }
             );
-
-            // Fee slip data is already available in the response
+            console.log("🔍 API response received for student:", student.id);
             console.log("🔍 Bulk Generation Response:", response.data);
+            console.log("🔍 Response structure:", {
+              hasFeeSlip: !!response.data.feeSlip,
+              hasPaymentStatus: !!response.data.payment_status,
+              responseKeys: Object.keys(response.data),
+              feeSlipKeys: response.data.feeSlip
+                ? Object.keys(response.data.feeSlip)
+                : null,
+            });
 
-            // Check if feeSlip exists in response
-            if (!response.data.feeSlip) {
+            // Check if feeSlip exists in response (existing fee slip)
+            if (response.data.feeSlip) {
+              // Existing fee slip structure
+              const feeSlipData = {
+                id: response.data.feeSlip.id || `temp-${student.id}`,
+                slip_id:
+                  response.data.feeSlip.slip_id ||
+                  `FS-${student.id}-${Date.now()}`,
+                student_name: student.name,
+                admission_number: student.admission_number,
+                father_name: student.father_name,
+                class_name: student.class_name,
+                arrears_amount: response.data.feeSlip?.arrears_amount || 0,
+                total_amount:
+                  response.data.payment_status?.current_month_remaining ||
+                  response.data.feeSlip?.total_amount ||
+                  student.monthly_fee,
+                due_date:
+                  response.data.feeSlip?.due_date ||
+                  new Date(
+                    new Date().getFullYear(),
+                    new Date().getMonth() + 1,
+                    10
+                  ),
+                month: new Date().getMonth() + 1,
+                year: new Date().getFullYear(),
+                // Current month payment information
+                current_month_expected:
+                  response.data.payment_status?.current_month_expected || 0,
+                current_month_paid:
+                  response.data.payment_status?.current_month_paid || 0,
+                current_month_remaining:
+                  response.data.payment_status?.current_month_remaining || 0,
+                // Auto-arrears information
+                is_past_due_date:
+                  response.data.payment_status?.is_past_due_date || false,
+                auto_arrears_added:
+                  response.data.payment_status?.auto_arrears_added || false,
+              };
+
+              return {
+                success: true,
+                student: student.name,
+                studentId: student.id,
+                exists: response.data.exists || false,
+                feeSlip: feeSlipData,
+              };
+            } else if (response.data.slip_id) {
+              // New fee slip creation structure
+              console.log("🔍 New fee slip created, fetching complete data...");
+
+              // Fetch the complete fee slip data using the new slip_id
+              try {
+                const fetchResponse = await axios.get(
+                  `/api/fee-slips/${response.data.slip_id}`,
+                  { headers: headers }
+                );
+
+                if (fetchResponse.data.feeSlip) {
+                  const feeSlipData = {
+                    id: fetchResponse.data.feeSlip.id || response.data.slip_id,
+                    slip_id:
+                      fetchResponse.data.feeSlip.slip_id ||
+                      response.data.slip_number,
+                    student_name: student.name,
+                    admission_number: student.admission_number,
+                    father_name: student.father_name,
+                    class_name: student.class_name,
+                    arrears_amount:
+                      fetchResponse.data.feeSlip?.arrears_amount || 0,
+                    total_amount:
+                      response.data.total_amount || student.monthly_fee,
+                    due_date:
+                      fetchResponse.data.feeSlip?.due_date ||
+                      new Date(
+                        new Date().getFullYear(),
+                        new Date().getMonth() + 1,
+                        10
+                      ),
+                    month: new Date().getMonth() + 1,
+                    year: new Date().getFullYear(),
+                    current_month_expected:
+                      fetchResponse.data.payment_status
+                        ?.current_month_expected || 0,
+                    current_month_paid:
+                      fetchResponse.data.payment_status?.current_month_paid ||
+                      0,
+                    current_month_remaining:
+                      fetchResponse.data.payment_status
+                        ?.current_month_remaining || 0,
+                    is_past_due_date:
+                      fetchResponse.data.payment_status?.is_past_due_date ||
+                      false,
+                    auto_arrears_added:
+                      fetchResponse.data.payment_status?.auto_arrears_added ||
+                      false,
+                  };
+
+                  return {
+                    success: true,
+                    student: student.name,
+                    studentId: student.id,
+                    exists: false,
+                    feeSlip: feeSlipData,
+                  };
+                } else {
+                  // Fallback if fetchResponse doesn't have feeSlip
+                  const feeSlipData = {
+                    id: response.data.slip_id,
+                    slip_id: response.data.slip_number,
+                    student_name: student.name,
+                    admission_number: student.admission_number,
+                    father_name: student.father_name,
+                    class_name: student.class_name,
+                    arrears_amount: 0,
+                    total_amount:
+                      response.data.total_amount || student.monthly_fee,
+                    due_date: new Date(
+                      new Date().getFullYear(),
+                      new Date().getMonth() + 1,
+                      10
+                    ),
+                    month: new Date().getMonth() + 1,
+                    year: new Date().getFullYear(),
+                    current_month_expected: 0,
+                    current_month_paid: 0,
+                    current_month_remaining:
+                      response.data.total_amount || student.monthly_fee,
+                    is_past_due_date: false,
+                    auto_arrears_added: false,
+                  };
+
+                  return {
+                    success: true,
+                    student: student.name,
+                    studentId: student.id,
+                    exists: false,
+                    feeSlip: feeSlipData,
+                  };
+                }
+              } catch (fetchError) {
+                console.error(
+                  "Error fetching complete fee slip data:",
+                  fetchError
+                );
+                // Fallback to basic data
+                const feeSlipData = {
+                  id: response.data.slip_id,
+                  slip_id: response.data.slip_number,
+                  student_name: student.name,
+                  admission_number: student.admission_number,
+                  father_name: student.father_name,
+                  class_name: student.class_name,
+                  arrears_amount: 0,
+                  total_amount:
+                    response.data.total_amount || student.monthly_fee,
+                  due_date: new Date(
+                    new Date().getFullYear(),
+                    new Date().getMonth() + 1,
+                    10
+                  ),
+                  month: new Date().getMonth() + 1,
+                  year: new Date().getFullYear(),
+                  current_month_expected: 0,
+                  current_month_paid: 0,
+                  current_month_remaining:
+                    response.data.total_amount || student.monthly_fee,
+                  is_past_due_date: false,
+                  auto_arrears_added: false,
+                };
+
+                return {
+                  success: true,
+                  student: student.name,
+                  studentId: student.id,
+                  exists: false,
+                  feeSlip: feeSlipData,
+                };
+              }
+            } else {
+              console.error(
+                "❌ No feeSlip in response. Full response:",
+                response.data
+              );
               throw new Error("No fee slip data received from server");
             }
-
-            const feeSlipData = {
-              id: response.data.feeSlip.id || `temp-${student.id}`,
-              slip_id:
-                response.data.feeSlip.slip_id ||
-                `FS-${student.id}-${Date.now()}`,
-              student_name: student.name,
-              admission_number: student.admission_number,
-              father_name: student.father_name,
-              class_name: student.class_name,
-              arrears_amount: response.data.feeSlip?.arrears_amount || 0,
-              total_amount:
-                response.data.payment_status?.current_month_remaining ||
-                response.data.feeSlip?.total_amount ||
-                student.monthly_fee,
-              due_date:
-                response.data.feeSlip?.due_date ||
-                new Date(
-                  new Date().getFullYear(),
-                  new Date().getMonth() + 1,
-                  10
-                ),
-              month: new Date().getMonth() + 1,
-              year: new Date().getFullYear(),
-              // Current month payment information
-              current_month_expected:
-                response.data.payment_status?.current_month_expected || 0,
-              current_month_paid:
-                response.data.payment_status?.current_month_paid || 0,
-              current_month_remaining:
-                response.data.payment_status?.current_month_remaining || 0,
-              // Auto-arrears information
-              is_past_due_date:
-                response.data.payment_status?.is_past_due_date || false,
-              auto_arrears_added:
-                response.data.payment_status?.auto_arrears_added || false,
-            };
-
-            return {
-              success: true,
-              student: student.name,
-              studentId: student.id,
-              exists: response.data.exists || false,
-              feeSlip: feeSlipData,
-            };
           } catch (error) {
             console.error(
               `Error generating fee slip for ${student.name}:`,
               error
             );
             console.error("Error details:", error.response?.data);
+            console.error("Full error response:", error.response);
             return {
               success: false,
               student: student.name,
@@ -2429,13 +2538,37 @@ export default {
         });
 
         const results = await Promise.all(promises);
-        const successful = results.filter((r) => r.success);
-        const failed = results.filter((r) => !r.success);
+        console.log("🔍 Promise.all results:", results);
+        console.log("🔍 Results length:", results.length);
+        console.log(
+          "🔍 Results structure:",
+          results.map((r) => ({
+            success: r?.success,
+            student: r?.student,
+            error: r?.error,
+          }))
+        );
+
+        const successful = results.filter((r) => r && r.success);
+        const failed = results.filter((r) => !r || !r.success);
         const existing = successful.filter((r) => r.exists);
         const newlyGenerated = successful.filter((r) => !r.exists);
 
-        // Show summary dialog
-        this.showBulkFeeSlipSummary(results);
+        // Skip summary dialog - directly proceed to PDF generation
+
+        // Generate PDFs with barcode for successful fee slips
+        if (successful.length > 0) {
+          try {
+            console.log("🔍 Fee slips generated successfully");
+            // Don't automatically open PDFs - just show success message
+            this.$toast.success(
+              `Generated ${successful.length} fee slips successfully!`
+            );
+          } catch (error) {
+            console.error("Error with fee slip generation:", error);
+            this.$toast.warning("Fee slips generated but there was an issue");
+          }
+        }
 
         if (successful.length > 0) {
           let message = `Processed ${successful.length} fee slips successfully`;
@@ -2455,11 +2588,55 @@ export default {
           this.$toast.error(`${failed.length} fee slips failed to generate.`);
         }
 
+        // After generating all fee slips, open the bulk PDF with THE EDUCATORS design
+        if (successful.length > 0) {
+          try {
+            const studentIds = successful.map((result) => result.studentId);
+
+            // Use axios to POST the student IDs to the bulk educators endpoint
+            const authData = getAuthData();
+            const headers =
+              authData && authData.token
+                ? { Authorization: `Bearer ${authData.token}` }
+                : {};
+
+            // Make the POST request to get the PDF
+            const response = await axios.post(
+              "/api/fee-slips/bulk-educators",
+              { student_ids: studentIds },
+              {
+                headers: headers,
+                responseType: "blob", // Important for PDF download
+              }
+            );
+
+            // Create blob URL and open in new tab
+            const blob = new Blob([response.data], { type: "application/pdf" });
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, "_blank");
+
+            this.$toast.success(
+              "THE EDUCATORS Bulk Fee Slips opened in new tab!"
+            );
+          } catch (error) {
+            console.error("Error opening bulk fee slips:", error);
+            this.$toast.error("Failed to open bulk fee slips");
+          }
+        }
+
         // Clear selection after generation
         this.selectedStudents = [];
         this.selectAll = false;
       } catch (error) {
         console.error("Error generating bulk fee slips:", error);
+
+        // Check if it's an authentication error
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          this.$toast.error("Authentication failed. Please log in again.");
+          // Don't redirect, just show error
+          return;
+        }
+
         this.$toast.error("Failed to generate fee slips");
       } finally {
         this.generatingFeeSlips = false;
@@ -2469,11 +2646,29 @@ export default {
     async loadStudents() {
       this.loading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const response = await axios.get("http://localhost:8081/api/students", {
-          headers: { Authorization: user.token },
+        const authData = getAuthData();
+        const [studentsResp, feeStatusResp] = await Promise.all([
+          axios.get("/api/students", {
+            headers: { Authorization: authData?.token },
+          }),
+          axios.get(`/api/students/classes/${this.classId}/fee-status`, {
+            headers: { Authorization: authData?.token },
+          }),
+        ]);
+
+        const students = studentsResp.data || [];
+        const feeStatusMap = new Map(
+          (feeStatusResp.data?.students || []).map((s) => [s.id, s])
+        );
+
+        this.students = students.map((s) => {
+          const fs = feeStatusMap.get(s.id);
+          return {
+            ...s,
+            arrears_amount: fs?.arrears_pending || 0,
+            fee_status: fs?.fee_status || s.fee_status,
+          };
         });
-        this.students = response.data;
       } catch (error) {
         console.error("Error loading students:", error);
       } finally {
@@ -2483,14 +2678,11 @@ export default {
 
     async loadAllClasses() {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const authData = getAuthData();
         console.log("Loading classes...");
-        const response = await axios.get(
-          "http://localhost:8081/api/students/classes",
-          {
-            headers: { Authorization: user.token },
-          }
-        );
+        const response = await axios.get("/api/students/classes", {
+          headers: { Authorization: authData?.token },
+        });
         this.allClasses = response.data;
         console.log("Loaded classes:", this.allClasses);
         console.log("Number of classes loaded:", this.allClasses.length);
@@ -2523,17 +2715,14 @@ export default {
 
     async loadClassInfo() {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const authData = getAuthData();
         const classId = this.classId;
         if (!classId) {
           throw new Error("Class not found");
         }
-        const response = await axios.get(
-          `http://localhost:8081/api/students/classes/${classId}`,
-          {
-            headers: { Authorization: user.token },
-          }
-        );
+        const response = await axios.get(`/api/students/classes/${classId}`, {
+          headers: { Authorization: authData?.token },
+        });
         this.classInfo = response.data;
       } catch (error) {
         console.error("Error loading class info:", error);
@@ -2563,6 +2752,160 @@ export default {
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         student.name || "Unknown"
       )}&background=1976d2&color=fff&size=200`;
+    },
+
+    // Fee status helper methods
+    getFeeStatusColor(student) {
+      if (!this.feeStatusData || !this.feeStatusData.students) {
+        return "grey";
+      }
+
+      const studentFeeData = this.feeStatusData.students.find(
+        (s) => s.id === student.id
+      );
+      if (!studentFeeData) {
+        return "grey";
+      }
+
+      switch (studentFeeData.fee_status) {
+        case "paid":
+          return "success";
+        case "partial":
+          return "warning";
+        case "unpaid":
+          return "error";
+        default:
+          return "grey";
+      }
+    },
+
+    getFeeStatusIcon(student) {
+      if (!this.feeStatusData || !this.feeStatusData.students) {
+        return "mdi-help-circle";
+      }
+
+      const studentFeeData = this.feeStatusData.students.find(
+        (s) => s.id === student.id
+      );
+      if (!studentFeeData) {
+        return "mdi-help-circle";
+      }
+
+      switch (studentFeeData.fee_status) {
+        case "paid":
+          return "mdi-check-circle";
+        case "partial":
+          return "mdi-alert-circle";
+        case "unpaid":
+          return "mdi-close-circle";
+        default:
+          return "mdi-help-circle";
+      }
+    },
+
+    getFeeStatusText(student) {
+      if (!this.feeStatusData || !this.feeStatusData.students) {
+        return "Unknown";
+      }
+
+      const studentFeeData = this.feeStatusData.students.find(
+        (s) => s.id === student.id
+      );
+      if (!studentFeeData) {
+        return "Unknown";
+      }
+
+      switch (studentFeeData.fee_status) {
+        case "paid":
+          return "Paid";
+        case "partial":
+          return "Partial";
+        case "unpaid":
+          return "Unpaid";
+        default:
+          return "Unknown";
+      }
+    },
+
+    // Filter students based on fee status
+    getFilteredStudentsForPrint() {
+      let students = this.selectedStudents;
+
+      if (this.printFeeStatusFilter === "all") {
+        return students;
+      }
+
+      if (!this.feeStatusData || !this.feeStatusData.students) {
+        return students; // If no fee data, return all students
+      }
+
+      const filteredStudents = students.filter((student) => {
+        const studentFeeData = this.feeStatusData.students.find(
+          (s) => s.id === student.id
+        );
+        // If student has fee data and matches filter, include them
+        if (
+          studentFeeData &&
+          studentFeeData.fee_status === this.printFeeStatusFilter
+        ) {
+          return true;
+        }
+        // If student has no fee data, include them (skip them gracefully)
+        if (!studentFeeData) {
+          return true;
+        }
+        return false;
+      });
+
+      // If no students match the filter, fall back to all selected students
+      if (filteredStudents.length === 0) {
+        console.log(
+          "No students match fee status filter, falling back to all selected students"
+        );
+        return students;
+      }
+
+      return filteredStudents;
+    },
+
+    getFilteredStudentsForExport() {
+      let students = this.selectedStudents;
+
+      if (this.exportFeeStatusFilter === "all") {
+        return students;
+      }
+
+      if (!this.feeStatusData || !this.feeStatusData.students) {
+        return students; // If no fee data, return all students
+      }
+
+      const filteredStudents = students.filter((student) => {
+        const studentFeeData = this.feeStatusData.students.find(
+          (s) => s.id === student.id
+        );
+        // If student has fee data and matches filter, include them
+        if (
+          studentFeeData &&
+          studentFeeData.fee_status === this.exportFeeStatusFilter
+        ) {
+          return true;
+        }
+        // If student has no fee data, include them (skip them gracefully)
+        if (!studentFeeData) {
+          return true;
+        }
+        return false;
+      });
+
+      // If no students match the filter, fall back to all selected students
+      if (filteredStudents.length === 0) {
+        console.log(
+          "No students match fee status filter, falling back to all selected students"
+        );
+        return students;
+      }
+
+      return filteredStudents;
     },
 
     viewStudentDetails(student) {
@@ -2597,8 +2940,8 @@ export default {
 
       this.promoting = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
         const studentIds = this.selectedStudents.map((s) => s.id);
+        const authData = getAuthData();
 
         // Handle both object and ID cases
         const newClassId =
@@ -2607,13 +2950,13 @@ export default {
             : this.selectedPromoteClass;
 
         const response = await axios.put(
-          `http://localhost:8081/api/students/promote`,
+          `/api/students/promote`,
           {
             studentIds,
             newClassId: newClassId,
           },
           {
-            headers: { Authorization: user.token },
+            headers: { Authorization: authData?.token },
           }
         );
 
@@ -2643,16 +2986,16 @@ export default {
 
       this.markingLeft = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
         const studentIds = this.selectedStudents.map((s) => s.id);
+        const authData = getAuthData();
 
         const response = await axios.put(
-          `http://localhost:8081/api/students/mark-left`,
+          `/api/students/mark-left`,
           {
             studentIds,
           },
           {
-            headers: { Authorization: user.token },
+            headers: { Authorization: authData?.token },
           }
         );
 
@@ -2677,15 +3020,14 @@ export default {
     async markStudentLeft(student) {
       this.markingLeft = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-
+        const authData = getAuthData();
         const response = await axios.put(
-          `http://localhost:8081/api/students/mark-left`,
+          `/api/students/mark-left`,
           {
             studentIds: [student.id],
           },
           {
-            headers: { Authorization: user.token },
+            headers: { Authorization: authData?.token },
           }
         );
 
@@ -2704,15 +3046,25 @@ export default {
     },
 
     async printStudents() {
-      if (this.selectedStudents.length === 0) {
-        this.$toast.error("Please select students to print");
+      const filteredStudents = this.getFilteredStudentsForPrint();
+
+      if (filteredStudents.length === 0) {
+        this.$toast.error("No students selected for printing");
+        return;
+      }
+
+      if (this.selectedFields.length === 0) {
+        this.$toast.error("Please select fields to print");
         return;
       }
 
       this.printing = true;
       try {
-        // Create print content
-        const printContent = this.generatePrintContent();
+        // Create print content with selected fields
+        const printContent = this.generatePrintContent(
+          this.selectedFields,
+          filteredStudents
+        );
 
         // Create a new window for printing
         const printWindow = window.open("", "_blank");
@@ -2726,8 +3078,9 @@ export default {
         };
 
         this.showPrintDialog = false;
+        this.selectedFields = [];
         this.$toast.success(
-          `Print dialog opened for ${this.selectedStudents.length} students`
+          `Printed ${filteredStudents.length} students with ${this.selectedFields.length} fields`
         );
       } catch (error) {
         console.error("Error printing:", error);
@@ -2737,10 +3090,160 @@ export default {
       }
     },
 
-    generatePrintContent() {
-      const currentDate = new Date().toLocaleDateString();
-      const currentTime = new Date().toLocaleTimeString();
+    async performBulkExport() {
+      if (this.selectedExportFields.length === 0) {
+        this.$toast.error("Please select fields to export");
+        return;
+      }
+
+      this.exporting = true;
+
+      try {
+        // Define the generateCSVContent method inline if it's not available
+        const generateCSVContent = (students, selectedFields = null) => {
+          console.log("generateCSVContent called with students:", students);
+
+          // Use selected fields if provided, otherwise use all fields
+          const fieldMappings = {
+            name: { header: "Name", key: "name" },
+            admission_number: {
+              header: "Admission Number",
+              key: "admission_number",
+            },
+            father_name: { header: "Father's Name", key: "father_name" },
+            cnic: { header: "CNIC", key: "cnic" },
+            phone: { header: "Phone", key: "phone" },
+            gender: { header: "Gender", key: "gender" },
+            class_name: { header: "Class", key: "class_name" },
+            date_of_birth: { header: "Date of Birth", key: "date_of_birth" },
+            admission_date: { header: "Admission Date", key: "admission_date" },
+            monthly_fee: { header: "Monthly Fee", key: "monthly_fee" },
+            fee_status: { header: "Fee Status", key: "fee_status" },
+            address: { header: "Address", key: "address" },
+          };
+
+          // Build headers based on selected fields
+          const headers = ["Sr.No"]; // Always include Sr.No
+          const fieldKeys = ["sr_no"];
+
+          if (selectedFields && selectedFields.length > 0) {
+            selectedFields.forEach((field) => {
+              if (fieldMappings[field]) {
+                headers.push(fieldMappings[field].header);
+                fieldKeys.push(fieldMappings[field].key);
+              }
+            });
+          } else {
+            // Default to all fields if no selection
+            Object.values(fieldMappings).forEach((field) => {
+              headers.push(field.header);
+              fieldKeys.push(field.key);
+            });
+          }
+
+          const csvRows = [headers.join(",")];
+
+          students.forEach((student) => {
+            console.log("Processing student:", student);
+
+            const row = fieldKeys.map((key) => {
+              if (key === "sr_no") {
+                return csvRows.length.toString(); // Use the current row number
+              } else if (key === "fee_status") {
+                let value = this.getFeeStatusText(student) || "";
+                return `"${value}"`;
+              }
+              let value = student[key] || "";
+              return `"${value}"`;
+            });
+            csvRows.push(row.join(","));
+          });
+
+          const result = csvRows.join("\n");
+          console.log("Generated CSV:", result);
+          return result;
+        };
+
+        const filteredStudents = this.getFilteredStudentsForExport();
+
+        if (filteredStudents.length === 0) {
+          this.$toast.error("No students selected for export");
+          return;
+        }
+
+        const csvContent = generateCSVContent(
+          filteredStudents,
+          this.selectedExportFields
+        );
+        const blob = new Blob([csvContent], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute(
+          "download",
+          `class_students_${new Date().toISOString().split("T")[0]}.csv`
+        );
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        this.$toast.success(
+          `Exported ${filteredStudents.length} students with ${this.selectedExportFields.length} fields successfully!`
+        );
+
+        this.showExportDialog = false;
+        this.selectedExportFields = [];
+      } catch (error) {
+        console.error("Error exporting selected students:", error);
+        this.$toast.error("An error occurred while exporting students");
+      } finally {
+        this.exporting = false;
+      }
+    },
+
+    generatePrintContent(selectedFields = null, students = null) {
       const className = this.classInfo.name;
+      const studentsToPrint = students || this.selectedStudents;
+
+      // Use selected fields if provided, otherwise use all fields
+      const fieldMappings = {
+        name: { header: "Name", key: "name" },
+        admission_number: {
+          header: "Admission Number",
+          key: "admission_number",
+        },
+        father_name: { header: "Father's Name", key: "father_name" },
+        cnic: { header: "CNIC", key: "cnic" },
+        phone: { header: "Phone", key: "phone" },
+        gender: { header: "Gender", key: "gender" },
+        class_name: { header: "Class", key: "class_name" },
+        date_of_birth: { header: "Date of Birth", key: "date_of_birth" },
+        admission_date: { header: "Admission Date", key: "admission_date" },
+        monthly_fee: { header: "Monthly Fee", key: "monthly_fee" },
+        address: { header: "Address", key: "address" },
+      };
+
+      // Build headers based on selected fields
+      const headers = ["Sr.No"]; // Always include Sr.No
+      const fieldKeys = ["sr_no"];
+
+      if (selectedFields && selectedFields.length > 0) {
+        selectedFields.forEach((field) => {
+          if (fieldMappings[field]) {
+            headers.push(fieldMappings[field].header);
+            fieldKeys.push(fieldMappings[field].key);
+          }
+        });
+      } else {
+        // Default to all fields if no selection
+        Object.values(fieldMappings).forEach((field) => {
+          headers.push(field.header);
+          fieldKeys.push(field.key);
+        });
+      }
 
       return `
         <!DOCTYPE html>
@@ -2758,6 +3261,7 @@ export default {
               border-bottom: 2px solid #333;
               padding-bottom: 20px;
               margin-bottom: 30px;
+              margin-top: 20px;
             }
             .school-name {
               font-size: 24px;
@@ -2780,7 +3284,7 @@ export default {
               margin-top: 20px;
             }
             th, td {
-              border: 1px solid #ddd;
+              border: 1px solid #333333;
               padding: 8px;
               text-align: left;
               font-size: 12px;
@@ -2821,6 +3325,19 @@ export default {
             @media print {
               body { margin: 0; }
               .no-print { display: none; }
+              @page {
+                margin: 0;
+                size: A4;
+              }
+            }
+            /* Hide browser-generated footer */
+            @media print {
+              body::after {
+                display: none !important;
+              }
+              body::before {
+                display: none !important;
+              }
             }
           </style>
         </head>
@@ -2829,48 +3346,34 @@ export default {
             <div class="school-name">The Educator School</div>
             <div class="report-title">Class Students Report - ${className}</div>
             <div class="report-info">
-              Generated on: ${currentDate} at ${currentTime} |
-              Total Students: ${this.selectedStudents.length}
+              Total Students: ${studentsToPrint.length}
             </div>
           </div>
 
           <table>
             <thead>
               <tr>
-                <th>Photo</th>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Admission Number</th>
-                                <th>Father's Name</th>
-                <th>CNIC</th>
-                <th>Phone</th>
-                <th>Gender</th>
-                <th>Date of Birth</th>
-                <th>Admission Date</th>
-                <th>Monthly Fee</th>
+                ${headers.map((header) => `<th>${header}</th>`).join("")}
               </tr>
             </thead>
             <tbody>
-              ${this.selectedStudents
+              ${studentsToPrint
                 .map(
-                  (student) => `
+                  (student, studentIndex) => `
                 <tr>
-                  <td>
-                    <img src="${this.getStudentAvatar(student)}"
-                         alt="Student Photo"
-                         class="student-photo"
-                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiNlNWU3ZWYiLz4KPHN2ZyB4PSIxMCIgeT0iMTAiIHdpZHRoPSIyMCIgaGVpZ2h0PSIyMCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSIjOWNhM2FmIj4KPHBhdGggZD0iTTEyIDEyYzIuMjEgMCA0LTEuNzkgNC00cy0xLjc5LTQtNC00LTQgMS43OS00IDQgMS43OSA0IDQgNHptMCAyYy0yLjY3IDAtOCAxLjM0LTggNHYyaDE2di0yYzAtMi42Ni01LjMzLTQtOC00eiIvPgo8L3N2Zz4KPC9zdmc+';">
-                  </td>
-                  <td>${student.id}</td>
-                  <td>${student.name}</td>
-                  <td>${student.admission_number}</td>
-                  <td>${student.father_name}</td>
-                  <td>${student.cnic}</td>
-                  <td>${student.phone}</td>
-                  <td>${student.gender}</td>
-                  <td>${student.date_of_birth}</td>
-                  <td>${student.admission_date}</td>
-                  <td>Rs${student.monthly_fee}</td>
+                  ${fieldKeys
+                    .map((key) => {
+                      if (key === "sr_no") {
+                        return `<td>${studentIndex + 1}</td>`;
+                      } else if (key === "monthly_fee") {
+                        return `<td>Rs${student[key] || ""}</td>`;
+                      } else if (key === "fee_status") {
+                        return `<td>${this.getFeeStatusText(student)}</td>`;
+                      } else {
+                        return `<td>${student[key] || ""}</td>`;
+                      }
+                    })
+                    .join("")}
                 </tr>
               `
                 )
@@ -2878,23 +3381,7 @@ export default {
             </tbody>
           </table>
 
-          <div class="summary">
-            <div class="summary-item">Class: ${className}</div>
-            <div class="summary-item">Total Students: ${
-              this.selectedStudents.length
-            }</div>
-            <div class="summary-item">Total Monthly Fee: Rs${this.selectedStudents
-              .reduce(
-                (sum, student) => sum + (parseFloat(student.monthly_fee) || 0),
-                0
-              )
-              .toLocaleString()}</div>
-          </div>
 
-          <div class="footer">
-            <p>This report was generated by The Educator School Management System</p>
-            <p>Page 1 of 1</p>
-          </div>
         </body>
         </html>
       `;
@@ -2942,11 +3429,6 @@ export default {
       console.log("selectedClass:", this.selectedClass);
       console.log("editingStudent:", this.editingStudent);
 
-      if (!this.$refs.editForm.validate()) {
-        console.log("Form validation failed");
-        return;
-      }
-
       this.saving = true;
       try {
         // Format dates for backend
@@ -2978,18 +3460,18 @@ export default {
         }
         console.log("Final studentData to save:", studentData);
 
-        const user = JSON.parse(localStorage.getItem("user"));
         console.log(
           "Sending API request to update student:",
           this.editingStudent.id
         );
         console.log("Request data:", studentData);
 
+        const authData = getAuthData();
         const response = await axios.put(
-          `http://localhost:8081/api/students/${this.editingStudent.id}`,
+          `/api/students/${this.editingStudent.id}`,
           studentData,
           {
-            headers: { Authorization: user.token },
+            headers: { Authorization: authData?.token },
           }
         );
 
@@ -3092,11 +3574,11 @@ export default {
 
       this.deleting = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const authData = getAuthData();
         const response = await axios.delete(
-          `http://localhost:8081/api/students/${this.deletingStudent.id}`,
+          `/api/students/${this.deletingStudent.id}`,
           {
-            headers: { Authorization: user.token },
+            headers: { Authorization: authData?.token },
           }
         );
 
@@ -3249,41 +3731,58 @@ export default {
       }
     },
 
-    generateCSVContent(students) {
+    generateCSVContent(students, selectedFields = null) {
       console.log("generateCSVContent called with students:", students);
 
-      const headers = [
-        "ID",
-        "Name",
-        "Admission Number",
-        "Father's Name",
-        "CNIC",
-        "Phone",
-        "Gender",
-        "Class",
-        "Date of Birth",
-        "Admission Date",
-        "Monthly Fee",
-      ];
+      // Use selected fields if provided, otherwise use all fields
+      const fieldMappings = {
+        name: { header: "Name", key: "name" },
+        admission_number: {
+          header: "Admission Number",
+          key: "admission_number",
+        },
+        father_name: { header: "Father's Name", key: "father_name" },
+        cnic: { header: "CNIC", key: "cnic" },
+        phone: { header: "Phone", key: "phone" },
+        gender: { header: "Gender", key: "gender" },
+        class_name: { header: "Class", key: "class_name" },
+        date_of_birth: { header: "Date of Birth", key: "date_of_birth" },
+        admission_date: { header: "Admission Date", key: "admission_date" },
+        monthly_fee: { header: "Monthly Fee", key: "monthly_fee" },
+        address: { header: "Address", key: "address" },
+      };
+
+      // Build headers based on selected fields
+      const headers = ["Sr.No"]; // Always include Sr.No
+      const fieldKeys = ["sr_no"];
+
+      if (selectedFields && selectedFields.length > 0) {
+        selectedFields.forEach((field) => {
+          if (fieldMappings[field]) {
+            headers.push(fieldMappings[field].header);
+            fieldKeys.push(fieldMappings[field].key);
+          }
+        });
+      } else {
+        // Default to all fields if no selection
+        Object.values(fieldMappings).forEach((field) => {
+          headers.push(field.header);
+          fieldKeys.push(field.key);
+        });
+      }
 
       const csvRows = [headers.join(",")];
 
       students.forEach((student) => {
         console.log("Processing student:", student);
 
-        const row = [
-          student.id || "",
-          `"${student.name || ""}"`,
-          student.admission_number || "",
-          `"${student.father_name || ""}"`,
-          student.cnic || "",
-          student.phone || "",
-          student.gender || "",
-          student.class_name || "",
-          student.date_of_birth || "",
-          student.admission_date || "",
-          student.monthly_fee || "",
-        ];
+        const row = fieldKeys.map((key) => {
+          if (key === "sr_no") {
+            return csvRows.length.toString(); // Use the current row number
+          }
+          let value = student[key] || "";
+          return `"${value}"`;
+        });
         csvRows.push(row.join(","));
       });
 
@@ -3336,12 +3835,9 @@ export default {
 
         for (const student of this.selectedStudents) {
           try {
-            await axios.delete(
-              `http://localhost:8081/api/students/${student.id}`,
-              {
-                headers: { Authorization: user.token },
-              }
-            );
+            await axios.delete(`/api/students/${student.id}`, {
+              headers: { Authorization: `Bearer ${user.token}` },
+            });
             successCount++;
           } catch (error) {
             console.error(`Error deleting student ${student.id}:`, error);

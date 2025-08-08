@@ -229,16 +229,13 @@ export default {
   methods: {
     async checkServerStatus() {
       try {
-        const response = await fetch("http://localhost:8081/api/status", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          // Short timeout to detect offline quickly
-          signal: AbortSignal.timeout(3000),
+        // Use axios with configured baseURL instead of hardcoded URL
+        const response = await this.$axios.get("/api/status", {
+          timeout: 3000,
         });
 
-        if (response.ok) {
+        // Axios doesn't have 'ok' property like fetch, check status instead
+        if (response.status >= 200 && response.status < 300) {
           this.isServerOffline = false;
         } else {
           this.isServerOffline = true;

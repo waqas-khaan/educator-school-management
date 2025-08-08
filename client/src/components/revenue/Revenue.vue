@@ -167,7 +167,10 @@
             </v-row>
 
             <!-- Quick Action Buttons -->
-            <v-row class="mb-8" v-if="userRole === 'admin'">
+            <v-row
+              class="mb-8"
+              v-if="userRole === 'admin' || userRole === 'accounts'"
+            >
               <v-col cols="12" sm="6" md="6" class="mb-4">
                 <v-card
                   class="glass-action-card"
@@ -359,6 +362,7 @@
                                 small
                                 color="primary"
                                 @click="editRevenue(item)"
+                                class="mr-2"
                               >
                                 <v-icon>mdi-pencil</v-icon>
                               </v-btn>
@@ -418,6 +422,7 @@
                                 small
                                 color="primary"
                                 @click="editExpense(item)"
+                                class="mr-2"
                               >
                                 <v-icon>mdi-pencil</v-icon>
                               </v-btn>
@@ -1174,8 +1179,12 @@ export default {
       this.loading = true;
       try {
         const authData = getAuthData();
-        const response = await axios.get("http://localhost:8081/api/revenue", {
-          headers: { Authorization: authData?.token },
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+        const response = await axios.get("/api/revenue", {
+          headers: headers,
         });
         this.revenueData = response.data;
         this.calculateFinancialStats();
@@ -1230,8 +1239,8 @@ export default {
       try {
         const authData = getAuthData();
         const deletePromises = this.selectedRevenueItems.map((item) =>
-          axios.delete(`http://localhost:8081/api/revenue/${item.id}`, {
-            headers: { Authorization: authData?.token },
+          axios.delete(`/api/revenue/${item.id}`, {
+            headers: { Authorization: `Bearer ${authData.token}` },
           })
         );
 
@@ -1351,8 +1360,12 @@ export default {
       this.loading = true;
       try {
         const authData = getAuthData();
-        const response = await axios.get("http://localhost:8081/api/expenses", {
-          headers: { Authorization: authData?.token },
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+        const response = await axios.get("/api/expenses", {
+          headers: headers,
         });
         this.expenseData = response.data;
         this.calculateFinancialStats();
@@ -1475,12 +1488,9 @@ export default {
         async () => {
           try {
             const authData = getAuthData();
-            await axios.delete(
-              `http://localhost:8081/api/revenue/${revenue.id}`,
-              {
-                headers: { Authorization: authData?.token },
-              }
-            );
+            await axios.delete(`/api/revenue/${revenue.id}`, {
+              headers: { Authorization: `Bearer ${authData.token}` },
+            });
 
             this.successMessage = "Revenue deleted successfully!";
             this.successDialog = true;
@@ -1524,12 +1534,9 @@ export default {
         async () => {
           try {
             const authData = getAuthData();
-            await axios.delete(
-              `http://localhost:8081/api/expenses/${expense.id}`,
-              {
-                headers: { Authorization: authData?.token },
-              }
-            );
+            await axios.delete(`/api/expenses/${expense.id}`, {
+              headers: { Authorization: `Bearer ${authData.token}` },
+            });
 
             this.successMessage = "Expense deleted successfully!";
             this.successDialog = true;
@@ -1551,7 +1558,11 @@ export default {
 
       this.revenueLoading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
         if (this.isEditing && this.editingRevenue) {
           // Update existing revenue
@@ -1559,22 +1570,18 @@ export default {
           console.log("Revenue ID:", this.editingRevenue.id);
 
           await axios.put(
-            `http://localhost:8081/api/revenue/${this.editingRevenue.id}`,
+            `/api/revenue/${this.editingRevenue.id}`,
             this.revenueForm,
             {
-              headers: { Authorization: user.token },
+              headers: headers,
             }
           );
           this.successMessage = "Revenue updated successfully!";
         } else {
           // Create new revenue
-          await axios.post(
-            "http://localhost:8081/api/revenue",
-            this.revenueForm,
-            {
-              headers: { Authorization: user.token },
-            }
-          );
+          await axios.post("/api/revenue", this.revenueForm, {
+            headers: headers,
+          });
           this.successMessage = "Revenue added successfully!";
         }
 
@@ -1601,7 +1608,11 @@ export default {
 
       this.expenseLoading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
         if (this.isEditing && this.editingExpense) {
           // Update existing expense
@@ -1609,22 +1620,18 @@ export default {
           console.log("Expense ID:", this.editingExpense.id);
 
           await axios.put(
-            `http://localhost:8081/api/expenses/${this.editingExpense.id}`,
+            `/api/expenses/${this.editingExpense.id}`,
             this.expenseForm,
             {
-              headers: { Authorization: user.token },
+              headers: headers,
             }
           );
           this.successMessage = "Expense updated successfully!";
         } else {
           // Create new expense
-          await axios.post(
-            "http://localhost:8081/api/expenses",
-            this.expenseForm,
-            {
-              headers: { Authorization: user.token },
-            }
-          );
+          await axios.post("/api/expenses", this.expenseForm, {
+            headers: headers,
+          });
           this.successMessage = "Expense added successfully!";
         }
 

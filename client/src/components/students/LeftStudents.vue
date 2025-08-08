@@ -716,6 +716,7 @@
 
 <script>
 import axios from "axios";
+import { getAuthData } from "@/utils/cookies";
 import ConfirmationDialog from "../ConfirmationDialog.vue";
 
 export default {
@@ -860,12 +861,16 @@ export default {
     async loadStudents() {
       this.loading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const response = await axios.get("http://localhost:8081/api/students", {
-          headers: { Authorization: user.token },
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+
+        const response = await axios.get("/api/students", {
+          headers: headers,
         });
         this.students = response.data;
-        console.log("Loaded students:", this.students);
       } catch (error) {
         console.error("Error loading students:", error);
       } finally {
@@ -908,9 +913,9 @@ export default {
       try {
         const user = JSON.parse(localStorage.getItem("user"));
         const response = await axios.put(
-          `http://localhost:8081/api/students/${this.studentToReactivate.id}/reactivate`,
+          `/api/students/${this.studentToReactivate.id}/reactivate`,
           {},
-          { headers: { Authorization: user.token } }
+          { headers: { Authorization: `Bearer ${user.token}` } }
         );
         console.log("Reactivate response:", response.data);
         await this.loadStudents(); // Refresh students list
@@ -936,8 +941,8 @@ export default {
       try {
         const user = JSON.parse(localStorage.getItem("user"));
         const response = await axios.delete(
-          `http://localhost:8081/api/students/${this.studentToDelete.id}`,
-          { headers: { Authorization: user.token } }
+          `/api/students/${this.studentToDelete.id}`,
+          { headers: { Authorization: `Bearer ${user.token}` } }
         );
         console.log("Delete response:", response.data);
         await this.loadStudents(); // Refresh students list

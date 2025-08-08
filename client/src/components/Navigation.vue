@@ -16,6 +16,8 @@
 
       <v-spacer></v-spacer>
 
+
+
       <!-- User Info -->
       <v-menu offset-y v-if="isAuthenticated">
         <template v-slot:activator="{ on, attrs }">
@@ -26,6 +28,14 @@
           </v-btn>
         </template>
 
+        <v-list-item @click="logout">
+          <v-list-item-icon>
+            <v-icon>mdi-logout</v-icon>
+          </v-list-item-icon>
+          <v-list-item-content>
+            <v-list-item-title>Logout</v-list-item-title>
+          </v-list-item-content>
+        </v-list-item>
         <v-list>
           <v-list-item>
             <v-list-item-content>
@@ -40,15 +50,6 @@
           </v-list-item>
 
           <v-divider></v-divider>
-
-          <v-list-item @click="logout">
-            <v-list-item-icon>
-              <v-icon>mdi-logout</v-icon>
-            </v-list-item-icon>
-            <v-list-item-content>
-              <v-list-item-title>Logout</v-list-item-title>
-            </v-list-item-content>
-          </v-list-item>
         </v-list>
       </v-menu>
 
@@ -79,6 +80,7 @@ export default {
       totalInflow: 0,
       totalExpenses: 0,
       thisMonthCollection: 0,
+
     };
   },
   computed: {
@@ -112,7 +114,9 @@ export default {
     if (this.isAuthenticated && this.userRole === "admin") {
       await this.fetchDashboardData();
     }
+
   },
+
   methods: {
     logout() {
       clearAuthCookies();
@@ -121,28 +125,28 @@ export default {
     async fetchDashboardData() {
       try {
         const authData = getAuthData();
-        const token = authData ? authData.token : null;
-        const headers = { Authorization: `Bearer ${token}` };
 
-        // Fetch all dashboard data
+        if (!authData || !authData.token) {
+          return;
+        }
+
+        const headers = { Authorization: `Bearer ${authData.token}` };
+
+        // Fetch all dashboard data using axios instead of fetch
         const [studentsRes, feesRes, salariesRes, revenueRes, expensesRes] =
           await Promise.all([
-            fetch("http://localhost:8081/api/students", { headers }),
-            fetch("http://localhost:8081/api/fees", { headers }),
-            fetch("http://localhost:8081/api/salaries", { headers }),
-            fetch("http://localhost:8081/api/revenue", { headers }),
-            fetch("http://localhost:8081/api/expenses", { headers }),
+            this.$axios.get("/api/students", { headers }),
+            this.$axios.get("/api/fees", { headers }),
+            this.$axios.get("/api/salaries", { headers }),
+            this.$axios.get("/api/revenue", { headers }),
+            this.$axios.get("/api/expenses", { headers }),
           ]);
 
-        const [students, fees, salaries, revenue, expenses] = await Promise.all(
-          [
-            studentsRes.json(),
-            feesRes.json(),
-            salariesRes.json(),
-            revenueRes.json(),
-            expensesRes.json(),
-          ]
-        );
+        const students = studentsRes.data || [];
+        const fees = feesRes.data || [];
+        const salaries = salariesRes.data || [];
+        const revenue = revenueRes.data || [];
+        const expenses = expensesRes.data || [];
 
         // Calculate statistics
         this.allAdmissions = students.length;
@@ -185,9 +189,38 @@ export default {
         console.error("Error fetching dashboard data:", error);
       }
     },
+
+    formatDate(dateString) {
+      const date = new Date(dateString);
+      const now = new Date();
+      const diffInHours = (now - date) / (1000 * 60 * 60);
+
+      if (diffInHours < 1) {
+        return "Just now";
+      } else if (diffInHours < 24) {
+        return `${Math.floor(diffInHours)} hours ago`;
+      } else {
+        return date.toLocaleDateString();
+      }
+    },
   },
 };
 </script>
+
+<style scoped>
+.notification-menu {
+  max-width: 400px;
+}
+
+.unread {
+  background-color: #f5f5f5;
+  border-left: 3px solid #1976d2;
+}
+
+.v-list-item:hover {
+  background-color: #f0f0f0;
+}
+</style>
 
 <style scoped>
 /* Navigation drawer styling */

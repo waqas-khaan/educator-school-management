@@ -88,14 +88,14 @@ exports.updateExpense = (req, res) => {
   db.query(query, values, (err, result) => {
     if (err) {
       console.error("Error updating expense:", err);
-      return res.status(500).json({ 
-        error: "Database error", 
-        details: err.message 
+      return res.status(500).json({
+        error: "Database error",
+        details: err.message,
       });
     }
-    
+
     console.log("Update expense result:", result);
-    
+
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: "Expense record not found" });
     }
@@ -109,22 +109,26 @@ exports.deleteExpense = (req, res) => {
 
   console.log("Delete expense request:", { id });
 
-  db.query("DELETE FROM expenses WHERE id = ?", [parseInt(id)], (err, result) => {
-    if (err) {
-      console.error("Error deleting expense:", err);
-      return res.status(500).json({ 
-        error: "Database error", 
-        details: err.message 
-      });
+  db.query(
+    "DELETE FROM expenses WHERE id = ?",
+    [parseInt(id)],
+    (err, result) => {
+      if (err) {
+        console.error("Error deleting expense:", err);
+        return res.status(500).json({
+          error: "Database error",
+          details: err.message,
+        });
+      }
+
+      console.log("Delete expense result:", result);
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ error: "Expense record not found" });
+      }
+      res.json({ message: "Expense record deleted successfully" });
     }
-    
-    console.log("Delete expense result:", result);
-    
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: "Expense record not found" });
-    }
-    res.json({ message: "Expense record deleted successfully" });
-  });
+  );
 };
 
 // Search expenses

@@ -297,7 +297,7 @@
                       small
                       @click="loadStudents"
                       :loading="loading"
-                      class="refresh-btn"
+                      class="refresh-btn mr-2"
                     >
                       <v-icon>mdi-refresh</v-icon>
                     </v-btn>
@@ -347,7 +347,7 @@
                         size="small"
                         class="mr-3 action-button export-btn"
                         :disabled="selectedStudents.length === 0"
-                        @click="exportSelectedStudents"
+                        @click="showExportDialog = true"
                         prepend-icon="mdi-download"
                         elevation="2"
                         rounded
@@ -485,23 +485,6 @@
                         <v-btn
                           icon
                           x-small
-                          color="warning"
-                          v-bind="attrs"
-                          v-on="on"
-                          @click="editStudent(item)"
-                          class="mr-1 action-icon"
-                        >
-                          <v-icon>mdi-pencil</v-icon>
-                        </v-btn>
-                      </template>
-                      <span>Edit Student</span>
-                    </v-tooltip>
-
-                    <v-tooltip bottom>
-                      <template v-slot:activator="{ on, attrs }">
-                        <v-btn
-                          icon
-                          x-small
                           color="error"
                           v-bind="attrs"
                           v-on="on"
@@ -560,6 +543,26 @@
                 </h4>
                 <div class="info-grid">
                   <div class="info-item">
+                    <span class="info-label">Admission Number:</span>
+                    <span class="info-value font-weight-bold primary--text">
+                      {{ selectedStudent.admission_number }}
+                    </span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">Status:</span>
+                    <v-chip
+                      :color="
+                        selectedStudent.status === 'Active'
+                          ? 'success'
+                          : 'error'
+                      "
+                      text-color="white"
+                      small
+                    >
+                      {{ selectedStudent.status }}
+                    </v-chip>
+                  </div>
+                  <div class="info-item">
                     <span class="info-label">Father's Name:</span>
                     <span class="info-value">{{
                       selectedStudent.father_name
@@ -616,19 +619,89 @@
                   <div class="info-item">
                     <span class="info-label">Admission Fee:</span>
                     <span class="info-value font-weight-bold">
-                      ₨{{ selectedStudent.admission_fee.toLocaleString() }}
+                      ₨{{
+                        selectedStudent.admission_fee_amount
+                          ? selectedStudent.admission_fee_amount.toLocaleString()
+                          : "0.00"
+                      }}
+                      <v-chip
+                        v-if="selectedStudent.is_admission_paid"
+                        color="success"
+                        outlined
+                        x-small
+                        class="ml-2"
+                      >
+                        Paid
+                      </v-chip>
+                      <v-chip
+                        v-else-if="selectedStudent.admission_fee_amount > 0"
+                        color="warning"
+                        outlined
+                        x-small
+                        class="ml-2"
+                      >
+                        Unpaid
+                      </v-chip>
                     </span>
                   </div>
                   <div class="info-item">
                     <span class="info-label">Monthly Fee:</span>
                     <span class="info-value font-weight-bold primary--text">
-                      ₨{{ selectedStudent.monthly_fee.toLocaleString() }}
+                      ₨{{
+                        selectedStudent.monthly_fee
+                          ? selectedStudent.monthly_fee.toLocaleString()
+                          : "0.00"
+                      }}
+                    </span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">Transport Fee:</span>
+                    <span
+                      class="info-value font-weight-bold"
+                      :class="
+                        selectedStudent.transport_fee > 0
+                          ? 'success--text'
+                          : 'grey--text'
+                      "
+                    >
+                      ₨{{
+                        selectedStudent.transport_fee
+                          ? selectedStudent.transport_fee.toLocaleString()
+                          : "0.00"
+                      }}
+                      <v-chip
+                        v-if="selectedStudent.transport_fee > 0"
+                        color="success"
+                        outlined
+                        x-small
+                        class="ml-2"
+                      >
+                        Active
+                      </v-chip>
+                      <v-chip v-else color="grey" outlined x-small class="ml-2">
+                        Inactive
+                      </v-chip>
                     </span>
                   </div>
                   <div class="info-item">
                     <span class="info-label">Annual Fund:</span>
                     <span class="info-value font-weight-bold">
-                      ₨{{ selectedStudent.annual_fund.toLocaleString() }}
+                      ₨{{
+                        selectedStudent.annual_fund
+                          ? selectedStudent.annual_fund.toLocaleString()
+                          : "0.00"
+                      }}
+                    </span>
+                  </div>
+                  <div class="info-item">
+                    <span class="info-label">Total Monthly Fee:</span>
+                    <span class="info-value font-weight-bold success--text">
+                      ₨{{
+                        (
+                          parseFloat(selectedStudent.monthly_fee || 0) +
+                          parseFloat(selectedStudent.transport_fee || 0)
+                        ).toLocaleString()
+                      }}
                     </span>
                   </div>
                 </div>
@@ -747,9 +820,7 @@
                 <v-text-field
                   v-model="selectedStudent.name"
                   label="Student Name"
-                  :rules="[rules.required]"
                   outlined
-                  required
                   class="form-field"
                 ></v-text-field>
               </v-col>
@@ -758,9 +829,7 @@
                 <v-text-field
                   v-model="selectedStudent.father_name"
                   label="Father's Name"
-                  :rules="[rules.required]"
                   outlined
-                  required
                   class="form-field"
                 ></v-text-field>
               </v-col>
@@ -769,9 +838,7 @@
                 <v-text-field
                   v-model="selectedStudent.cnic"
                   label="CNIC"
-                  :rules="[rules.required, rules.cnic]"
                   outlined
-                  required
                   class="form-field"
                 ></v-text-field>
               </v-col>
@@ -780,9 +847,7 @@
                 <v-text-field
                   v-model="selectedStudent.phone"
                   label="Phone Number"
-                  :rules="[rules.required, rules.phone]"
                   outlined
-                  required
                   class="form-field"
                 ></v-text-field>
               </v-col>
@@ -792,9 +857,7 @@
                   v-model="selectedStudent.gender"
                   :items="genderOptions"
                   label="Gender"
-                  :rules="[rules.required]"
                   outlined
-                  required
                   class="form-field"
                 ></v-select>
               </v-col>
@@ -815,9 +878,7 @@
                       readonly
                       v-bind="attrs"
                       v-on="on"
-                      :rules="[rules.required]"
                       outlined
-                      required
                       class="form-field"
                     ></v-text-field>
                   </template>
@@ -847,9 +908,7 @@
                       readonly
                       v-bind="attrs"
                       v-on="on"
-                      :rules="[rules.required]"
                       outlined
-                      required
                       class="form-field"
                     ></v-text-field>
                   </template>
@@ -870,9 +929,7 @@
                   item-text="name"
                   item-value="id"
                   label="Class"
-                  :rules="[rules.required]"
                   outlined
-                  required
                   class="form-field"
                 ></v-select>
               </v-col>
@@ -882,11 +939,52 @@
                   v-model.number="selectedStudent.monthly_fee"
                   label="Monthly Fee"
                   type="number"
-                  :rules="[rules.required, rules.positive]"
                   outlined
-                  required
                   prefix="₨"
                   class="form-field"
+                ></v-text-field>
+              </v-col>
+
+              <v-col cols="12" md="6">
+                <v-text-field
+                  v-model.number="selectedStudent.admission_fee_amount"
+                  label="Admission Fee"
+                  type="number"
+                  outlined
+                  prefix="₨"
+                  class="form-field"
+                  placeholder="Enter admission fee amount"
+                  hint="Enter 0 or leave empty for no admission fee"
+                  persistent-hint
+                ></v-text-field>
+              </v-col>
+
+              <v-col cols="12" md="6">
+                <v-checkbox
+                  v-model="selectedStudent.transport_required"
+                  label="Transport Required"
+                  color="primary"
+                  class="modern-checkbox"
+                  prepend-icon="mdi-bus"
+                  dense
+                  hint="Check if student requires transport service"
+                  persistent-hint
+                ></v-checkbox>
+              </v-col>
+
+              <v-col cols="12" md="6">
+                <v-text-field
+                  v-model.number="selectedStudent.transport_fee"
+                  label="Transport Fee"
+                  type="number"
+                  :rules="[rules.optionalPositive]"
+                  outlined
+                  prefix="₨"
+                  class="form-field"
+                  placeholder="Enter transport fee amount"
+                  hint="Enter 0 or leave empty for no transport fee"
+                  persistent-hint
+                  :disabled="!selectedStudent.transport_required"
                 ></v-text-field>
               </v-col>
 
@@ -894,9 +992,7 @@
                 <v-textarea
                   v-model="selectedStudent.address"
                   label="Address"
-                  :rules="[rules.required]"
                   outlined
-                  required
                   rows="3"
                   class="form-field"
                 ></v-textarea>
@@ -919,7 +1015,6 @@
             color="primary"
             @click="saveStudentEdit"
             :loading="editLoading"
-            :disabled="!editFormValid"
             class="save-btn"
           >
             <v-icon left>mdi-content-save</v-icon>
@@ -984,24 +1079,29 @@
               Print {{ selectedStudents.length }} Student Records
             </h4>
             <p class="text-body-2 text-medium-emphasis">
-              Generate a detailed report with fee information
+              Select fields to include in the printout
             </p>
           </div>
 
-          <v-alert type="info" class="mb-4">
-            <template v-slot:prepend>
-              <v-icon>mdi-information</v-icon>
-            </template>
-            <div class="text-body-2">
-              <strong>Report includes:</strong>
-              <ul class="mt-2 mb-0">
-                <li>Student personal information</li>
-                <li>Current monthly fees</li>
-                <li>Balance and fine details</li>
-                <li>Total fee calculations</li>
-              </ul>
-            </div>
-          </v-alert>
+          <v-card outlined class="pa-4 mb-4">
+            <div class="text-h6 mb-3">Available Fields</div>
+            <v-row>
+              <v-col
+                cols="12"
+                sm="6"
+                v-for="field in availableFields"
+                :key="field.value"
+              >
+                <v-checkbox
+                  v-model="selectedFields"
+                  :value="field.value"
+                  :label="field.text"
+                  color="primary"
+                  hide-details
+                ></v-checkbox>
+              </v-col>
+            </v-row>
+          </v-card>
         </v-card-text>
 
         <v-card-actions class="pa-6 pt-0">
@@ -1021,13 +1121,104 @@
             color="info"
             @click="performBulkPrint"
             :loading="printing"
-            :disabled="printing"
+            :disabled="selectedFields.length === 0"
             class="px-6 action-btn"
             rounded
             elevation="2"
           >
             <v-icon left>mdi-printer</v-icon>
-            Print Records
+            Print ({{ selectedFields.length }} fields)
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <!-- Export Students Dialog -->
+    <v-dialog v-model="showExportDialog" max-width="500" persistent>
+      <v-card class="print-dialog-card" elevation="24" rounded="xl">
+        <v-card-title class="print-dialog-header pa-6">
+          <div class="d-flex align-center">
+            <v-avatar size="48" color="success" class="mr-4">
+              <v-icon size="24" color="white">mdi-download</v-icon>
+            </v-avatar>
+            <div>
+              <h3 class="text-h5 font-weight-bold white--text mb-1">
+                Export Student Records
+              </h3>
+              <p class="text-subtitle-2 white--text opacity-80">
+                Generate CSV export
+              </p>
+            </div>
+          </div>
+          <v-btn
+            icon
+            dark
+            @click="showExportDialog = false"
+            class="close-btn"
+            :disabled="exporting"
+          >
+            <v-icon>mdi-close</v-icon>
+          </v-btn>
+        </v-card-title>
+
+        <v-card-text class="pa-6">
+          <div class="text-center mb-6">
+            <v-icon size="64" color="success" class="mb-3"
+              >mdi-file-excel</v-icon
+            >
+            <h4 class="text-h6 font-weight-bold mb-3">
+              Export {{ selectedStudents.length }} Student Records
+            </h4>
+            <p class="text-body-2 text-medium-emphasis">
+              Select fields to include in the CSV export
+            </p>
+          </div>
+
+          <v-card outlined class="pa-4 mb-4">
+            <div class="text-h6 mb-3">Available Fields</div>
+            <v-row>
+              <v-col
+                cols="12"
+                sm="6"
+                v-for="field in availableFields"
+                :key="field.value"
+              >
+                <v-checkbox
+                  v-model="selectedExportFields"
+                  :value="field.value"
+                  :label="field.text"
+                  color="success"
+                  hide-details
+                ></v-checkbox>
+              </v-col>
+            </v-row>
+          </v-card>
+        </v-card-text>
+
+        <v-card-actions class="pa-6 pt-0">
+          <v-spacer></v-spacer>
+          <v-btn
+            outlined
+            color="grey"
+            @click="showExportDialog = false"
+            :disabled="exporting"
+            class="px-6 action-btn"
+            rounded
+          >
+            <v-icon left>mdi-close</v-icon>
+            Cancel
+          </v-btn>
+          <v-btn
+            color="success"
+            @click="performBulkExport"
+            :loading="exporting"
+            :disabled="selectedExportFields.length === 0"
+            class="px-6 action-btn"
+            rounded
+            elevation="2"
+          >
+            <v-icon left>mdi-download</v-icon>
+            Export ({{ selectedExportFields.length }} fields)
           </v-btn>
         </v-card-actions>
       </v-card>
@@ -1037,6 +1228,7 @@
 
 <script>
 import axios from "axios";
+import { getAuthData } from "@/utils/cookies";
 import ConfirmationDialog from "../ConfirmationDialog.vue";
 
 export default {
@@ -1067,8 +1259,25 @@ export default {
       generatingFeeSlips: false,
       showPromoteDialog: false,
       showPrintDialog: false,
+      showExportDialog: false,
       showLeftDialog: false,
       printing: false,
+      exporting: false,
+      selectedFields: [],
+      selectedExportFields: [],
+      availableFields: [
+        { text: "Student Name", value: "name" },
+        { text: "Admission Number", value: "admission_number" },
+        { text: "Father's Name", value: "father_name" },
+        { text: "CNIC", value: "cnic" },
+        { text: "Phone", value: "phone" },
+        { text: "Gender", value: "gender" },
+        { text: "Class", value: "class_name" },
+        { text: "Date of Birth", value: "date_of_birth" },
+        { text: "Admission Date", value: "admission_date" },
+        { text: "Monthly Fee", value: "monthly_fee" },
+        { text: "Address", value: "address" },
+      ],
       bulkConfirmDialog: {
         show: false,
         title: "",
@@ -1090,6 +1299,8 @@ export default {
       rules: {
         required: (v) => !!v || "This field is required",
         positive: (v) => v > 0 || "Amount must be positive",
+        optionalPositive: (v) =>
+          !v || v >= 0 || "Value must be zero or positive",
         cnic: (v) =>
           /^\d{5}-\d{7}-\d$/.test(v) ||
           "CNIC must be in format: 12345-1234567-1",
@@ -1164,7 +1375,6 @@ export default {
   async mounted() {
     // Check authentication status
     const user = JSON.parse(localStorage.getItem("user"));
-    console.log("Mounted - Current user:", user);
 
     if (!user || !user.token) {
       console.error("No authentication found, redirecting to login");
@@ -1174,7 +1384,6 @@ export default {
 
     await this.loadStudents();
     await this.loadClasses();
-    console.log("Mounted - Classes loaded:", this.classesList.length);
   },
   methods: {
     async loadStudents() {
@@ -1188,8 +1397,8 @@ export default {
           return;
         }
 
-        const response = await axios.get("http://localhost:8081/api/students", {
-          headers: { Authorization: user.token },
+        const response = await axios.get("/api/students", {
+          headers: { Authorization: `Bearer ${user.token}` },
         });
         this.students = response.data;
       } catch (error) {
@@ -1206,15 +1415,16 @@ export default {
 
     async loadClasses() {
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        const response = await axios.get(
-          "http://localhost:8081/api/students/classes",
-          {
-            headers: { Authorization: user.token },
-          }
-        );
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+
+        const response = await axios.get("/api/students/classes", {
+          headers: headers,
+        });
         this.classesList = response.data;
-        console.log("Classes loaded:", this.classesList);
       } catch (error) {
         console.error("Error loading classes:", error);
         // Set empty array as fallback
@@ -1232,9 +1442,9 @@ export default {
       try {
         const user = JSON.parse(localStorage.getItem("user"));
         const response = await axios.get(
-          `http://localhost:8081/api/students/search?query=${this.searchQuery}`,
+          `/api/students/search?query=${this.searchQuery}`,
           {
-            headers: { Authorization: user.token },
+            headers: { Authorization: `Bearer ${user.token}` },
           }
         );
         this.students = response.data;
@@ -1261,7 +1471,6 @@ export default {
     editStudent(student) {
       // Check authentication status
       const user = JSON.parse(localStorage.getItem("user"));
-      console.log("Current user:", user);
 
       if (!user || !user.token) {
         console.error("No user token found, redirecting to login");
@@ -1288,6 +1497,9 @@ export default {
         formattedStudent.admission_date
       );
 
+      // Initialize transport_required based on transport_fee
+      formattedStudent.transport_required = formattedStudent.transport_fee > 0;
+
       // Open edit dialog instead of navigating
       this.selectedStudent = formattedStudent;
       this.editDialog = true;
@@ -1299,14 +1511,9 @@ export default {
         return;
       }
 
-      if (!this.$refs.editForm.validate()) {
-        return;
-      }
-
       this.editLoading = true;
       try {
         const user = JSON.parse(localStorage.getItem("user"));
-        console.log("Saving student edit with user:", user);
 
         if (!user || !user.token) {
           throw new Error("No authentication token found");
@@ -1327,11 +1534,16 @@ export default {
           studentData.admission_date = date.toISOString().split("T")[0];
         }
 
+        // Handle transport fee based on checkbox
+        if (!studentData.transport_required) {
+          studentData.transport_fee = 0;
+        }
+
         const response = await axios.put(
-          `http://localhost:8081/api/students/${this.selectedStudent.id}`,
+          `/api/students/${this.selectedStudent.id}`,
           studentData,
           {
-            headers: { Authorization: user.token },
+            headers: { Authorization: `Bearer ${user.token}` },
           }
         );
 
@@ -1364,13 +1576,14 @@ export default {
     async confirmDelete() {
       this.deleteLoading = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-        await axios.delete(
-          `http://localhost:8081/api/students/${this.studentToDelete.id}`,
-          {
-            headers: { Authorization: user.token },
-          }
-        );
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
+        await axios.delete(`/api/students/${this.studentToDelete.id}`, {
+          headers: headers,
+        });
 
         this.students = this.students.filter(
           (s) => s.id !== this.studentToDelete.id
@@ -1594,43 +1807,100 @@ export default {
       }
     },
 
-    generateCSVContent(students) {
-      const headers = [
-        "ID",
-        "Name",
-        "Admission Number",
-        "Father's Name",
-        "CNIC",
-        "Phone",
-        "Gender",
-        "Class",
-        "Date of Birth",
-        "Admission Date",
-        "Monthly Fee",
-        "Status",
-      ];
+    generateCSVContent(students, selectedFields = null) {
+      // Use selected fields if provided, otherwise use all fields
+      const fieldMappings = {
+        name: { header: "Name", key: "name" },
+        admission_number: {
+          header: "Admission Number",
+          key: "admission_number",
+        },
+        father_name: { header: "Father's Name", key: "father_name" },
+        cnic: { header: "CNIC", key: "cnic" },
+        phone: { header: "Phone", key: "phone" },
+        gender: { header: "Gender", key: "gender" },
+        class_name: { header: "Class", key: "class_name" },
+        date_of_birth: { header: "Date of Birth", key: "date_of_birth" },
+        admission_date: { header: "Admission Date", key: "admission_date" },
+        monthly_fee: { header: "Monthly Fee", key: "monthly_fee" },
+        address: { header: "Address", key: "address" },
+      };
+
+      // Build headers based on selected fields
+      const headers = ["ID"]; // Always include ID
+      const fieldKeys = ["id"];
+
+      if (selectedFields && selectedFields.length > 0) {
+        selectedFields.forEach((field) => {
+          if (fieldMappings[field]) {
+            headers.push(fieldMappings[field].header);
+            fieldKeys.push(fieldMappings[field].key);
+          }
+        });
+      } else {
+        // Default to all fields if no selection
+        Object.values(fieldMappings).forEach((field) => {
+          headers.push(field.header);
+          fieldKeys.push(field.key);
+        });
+      }
 
       const csvRows = [headers.join(",")];
 
       students.forEach((student) => {
-        const row = [
-          student.id,
-          `"${student.name}"`,
-          `"${student.admission_number}"`,
-          `"${student.father_name}"`,
-          `"${student.cnic}"`,
-          `"${student.phone}"`,
-          `"${student.gender}"`,
-          `"${student.class}"`,
-          `"${student.date_of_birth}"`,
-          `"${student.admission_date}"`,
-          `"${student.monthly_fee}"`,
-          `"${student.status || "Active"}"`,
-        ];
+        const row = fieldKeys.map((key) => {
+          let value = student[key] || "";
+          if (key === "id") {
+            return value;
+          }
+          return `"${value}"`;
+        });
         csvRows.push(row.join(","));
       });
 
       return csvRows.join("\n");
+    },
+
+    async performBulkExport() {
+      if (this.selectedExportFields.length === 0) {
+        this.$toast.error("Please select fields to export");
+        return;
+      }
+
+      this.exporting = true;
+
+      try {
+        const csvContent = this.generateCSVContent(
+          this.selectedStudents,
+          this.selectedExportFields
+        );
+        const blob = new Blob([csvContent], {
+          type: "text/csv;charset=utf-8;",
+        });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute(
+          "download",
+          `selected_students_${new Date().toISOString().split("T")[0]}.csv`
+        );
+        link.style.visibility = "hidden";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        this.$toast.success(
+          `Exported ${this.selectedStudents.length} students with ${this.selectedExportFields.length} fields successfully!`
+        );
+
+        this.showExportDialog = false;
+        this.selectedExportFields = [];
+      } catch (error) {
+        console.error("Error exporting selected students:", error);
+        this.$toast.error("An error occurred while exporting students");
+      } finally {
+        this.exporting = false;
+      }
     },
 
     async deleteSelectedStudents() {
@@ -1716,20 +1986,23 @@ export default {
 
       this.generatingFeeSlips = true;
       try {
-        const user = JSON.parse(localStorage.getItem("user"));
-
         // Generate fee slips for each selected student
         const promises = this.selectedStudents.map(async (student) => {
           try {
+            const authData = getAuthData();
+            const headers =
+              authData && authData.token
+                ? { Authorization: `Bearer ${authData.token}` }
+                : {};
             const response = await axios.post(
-              "http://localhost:8081/api/fee-slips/generate",
+              "/api/fee-slips/generate",
               {
                 student_id: student.id,
                 month: new Date().getMonth() + 1,
                 year: new Date().getFullYear(),
               },
               {
-                headers: { Authorization: user.token },
+                headers: headers,
               }
             );
             return {
@@ -1742,7 +2015,9 @@ export default {
               success: false,
               student: student.name,
               error:
-                error.response?.data?.error || "Failed to generate fee slip",
+                error.response?.data?.error ||
+                error.message ||
+                "Failed to generate fee slip",
             };
           }
         });
@@ -1788,34 +2063,99 @@ export default {
         return;
       }
 
+      // Initialize selected fields with all fields selected by default
+      this.selectedFields = this.availableFields.map((field) => field.value);
       this.showPrintDialog = true;
     },
 
     async performBulkPrint() {
+      if (this.selectedFields.length === 0) {
+        this.$toast.error("Please select at least one field to print");
+        return;
+      }
+
       this.printing = true;
-
       try {
-        // Create print content
-        const printContent = this.generatePrintContent(this.selectedStudents);
+        const authData = getAuthData();
+        const headers =
+          authData && authData.token
+            ? { Authorization: `Bearer ${authData.token}` }
+            : {};
 
-        // Create a new window for printing
-        const printWindow = window.open("", "_blank");
-        printWindow.document.write(printContent);
-        printWindow.document.close();
-
-        // Wait for content to load then print
-        printWindow.onload = function () {
-          printWindow.print();
-          printWindow.close();
+        // Prepare data for printing
+        const printData = {
+          studentIds: this.selectedStudents.map((student) => student.id),
+          selectedFields: this.selectedFields,
         };
 
-        this.showPrintDialog = false;
-        this.$toast.success(
-          `Print dialog opened for ${this.selectedStudents.length} students`
+        console.log("Printing data:", printData);
+
+        // Call the custom print API
+        const response = await axios.post(
+          "/api/admission-slips/custom-print",
+          printData,
+          {
+            headers: {
+              ...headers,
+              "Content-Type": "application/json",
+            },
+            responseType: "blob",
+          }
         );
+
+        // Create blob URL for the PDF
+        const blob = new Blob([response.data], {
+          type: "application/pdf",
+        });
+        const url = window.URL.createObjectURL(blob);
+
+        // Open PDF in a new window for printing
+        const printWindow = window.open(url, "_blank", "width=800,height=600");
+
+        if (printWindow) {
+          // Wait for the PDF to load, then trigger print dialog
+          printWindow.onload = () => {
+            printWindow.print();
+          };
+
+          // Fallback: if onload doesn't work, try printing after a short delay
+          setTimeout(() => {
+            if (printWindow && !printWindow.closed) {
+              printWindow.print();
+            }
+          }, 2000);
+
+          // Clean up the blob URL after a delay
+          setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+          }, 10000);
+
+          this.$toast.success("Print dialog opened successfully");
+        } else {
+          // If popup is blocked, fall back to download
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `student_records_${
+            new Date().toISOString().split("T")[0]
+          }.pdf`;
+          link.style.display = "none";
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          setTimeout(() => {
+            window.URL.revokeObjectURL(url);
+          }, 100);
+
+          this.$toast.info(
+            "Popup blocked. Student records downloaded instead."
+          );
+        }
+
+        this.showPrintDialog = false;
       } catch (error) {
-        console.error("Error in bulk print:", error);
-        this.$toast.error("An error occurred during printing");
+        console.error("Error printing student records:", error);
+        this.$toast.error(`Failed to print student records: ${error.message}`);
       } finally {
         this.printing = false;
       }
@@ -2815,5 +3155,31 @@ export default {
 .v-alert li {
   margin-bottom: 4px;
   color: #424242;
+}
+
+/* Modern Checkbox */
+.modern-checkbox {
+  font-family: "Inter", sans-serif !important;
+}
+
+.modern-checkbox :deep(.v-selection-control) {
+  background: #f8f9fa !important;
+  border-radius: 8px !important;
+  padding: 8px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.modern-checkbox :deep(.v-selection-control:hover) {
+  background: #ffffff !important;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.15) !important;
+}
+
+.modern-checkbox :deep(.v-label) {
+  color: #6c757d !important;
+  font-weight: 500 !important;
+}
+
+.modern-checkbox :deep(.v-icon) {
+  color: #667eea !important;
 }
 </style>

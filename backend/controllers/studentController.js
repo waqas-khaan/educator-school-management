@@ -2,6 +2,7 @@ const db = require("../config/db");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+// Removed auto-print import - no longer needed
 
 // Configure multer for file uploads
 const storage = multer.diskStorage({
@@ -132,10 +133,51 @@ exports.getStudentByAdmissionNumber = (req, res) => {
   });
 };
 
+// Generate EDU admission number
+const generateEDUAdmissionNumber = () => {
+  return new Promise((resolve, reject) => {
+    const currentYear = new Date().getFullYear();
+
+    // Get the highest admission number for the current year
+    const query = `
+      SELECT admission_number 
+      FROM students 
+      WHERE admission_number LIKE 'EDU-${currentYear}-%' 
+      ORDER BY admission_number DESC 
+      LIMIT 1
+    `;
+
+    db.query(query, (err, results) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      let nextNumber = 1;
+      if (results.length > 0) {
+        // Extract the number from the highest admission number
+        const lastAdmissionNumber = results[0].admission_number;
+        const match = lastAdmissionNumber.match(/EDU-\d{4}-(\d{4})/);
+        if (match) {
+          nextNumber = parseInt(match[1]) + 1;
+        }
+      }
+
+      const admissionNumber = `EDU-${currentYear}-${nextNumber
+        .toString()
+        .padStart(4, "0")}`;
+      console.log("Generated admission number:", admissionNumber);
+      resolve(admissionNumber);
+    });
+  });
+};
+
 // Add new student
-exports.addStudent = (req, res) => {
+exports.addStudent = async (req, res) => {
   console.log("Received student data:", req.body);
   console.log("Files received:", req.files);
+  console.log("Admission fee from form:", req.body.admission_fee);
+  console.log("Admission fee type:", typeof req.body.admission_fee);
 
   const {
     name,
@@ -148,7 +190,7 @@ exports.addStudent = (req, res) => {
     class_id,
     admission_fee,
     monthly_fee,
-    annual_fund,
+    transport_fee,
     address,
     admission_number,
   } = req.body;
@@ -160,7 +202,6 @@ exports.addStudent = (req, res) => {
     !cnic ||
     !phone ||
     !gender ||
-    !date_of_birth ||
     !admission_date ||
     !address
   ) {
@@ -172,7 +213,6 @@ exports.addStudent = (req, res) => {
         "cnic",
         "phone",
         "gender",
-        "date_of_birth",
         "admission_date",
         "address",
       ],
@@ -190,7 +230,7 @@ exports.addStudent = (req, res) => {
     class_id,
     admission_fee,
     monthly_fee,
-    annual_fund,
+    transport_fee,
     address,
   });
 
@@ -199,13 +239,13 @@ exports.addStudent = (req, res) => {
 
   // Use admission number from form or generate if not provided
   const finalAdmissionNumber =
-    admission_number || `ADM-${new Date().getFullYear()}-${Date.now()}`;
+    admission_number || (await generateEDUAdmissionNumber());
 
   // Proceed with insertion (allowing duplicate CNICs)
   const query = `
     INSERT INTO students (
       admission_number, name, father_name, cnic, phone, gender, date_of_birth, admission_date,
-      class_id, admission_fee_amount, monthly_fee, annual_fund, address, profile_image, admission_form
+      class_id, admission_fee_amount, monthly_fee, transport_fee, address, profile_image, admission_form
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
@@ -229,18 +269,29 @@ exports.addStudent = (req, res) => {
     date_of_birth,
     admission_date,
     class_id,
-    admission_fee || 0, // Use 0 if admission fee is not provided
-    monthly_fee || 0,
-    annual_fund || 0,
+    parseFloat(admission_fee) || 0, // Use 0 as default registration fee
+    parseFloat(monthly_fee) || 0,
+    parseFloat(transport_fee) || 0, // Use 0 as default transport fee
     address,
     profileImagePath,
     admissionFormPath,
   ];
 
   console.log("SQL Query:", query);
+  console.log("Raw form data:", {
+    admission_fee: admission_fee,
+    monthly_fee: monthly_fee,
+    admission_fee_type: typeof admission_fee,
+    monthly_fee_type: typeof monthly_fee,
+  });
+  console.log("Values being inserted:", values);
+  console.log(
+    "Admission fee value being saved:",
+    parseFloat(admission_fee) || 0
+  );
   console.log("Values:", values);
 
-  db.query(query, values, (err, result) => {
+  db.query(query, values, async (err, result) => {
     if (err) {
       console.error("Error adding student:", err);
       console.error("Error details:", err.message);
@@ -248,10 +299,14 @@ exports.addStudent = (req, res) => {
         .status(500)
         .json({ error: "Database error", details: err.message });
     }
+
     console.log("Student added successfully:", result);
+
+    // Return success response without auto-printing
     res.status(201).json({
       message: "Student added successfully",
       student_id: result.insertId,
+      admission_number: finalAdmissionNumber,
     });
   });
 };
@@ -263,6 +318,10 @@ exports.updateStudent = (req, res) => {
   console.log("Request body:", req.body);
 
   const { id } = req.params;
+  console.log("=== UPDATE STUDENT ===");
+  console.log("Student ID:", id);
+  console.log("Request body:", req.body);
+
   const {
     name,
     father_name,
@@ -272,34 +331,38 @@ exports.updateStudent = (req, res) => {
     date_of_birth,
     admission_date,
     class_id,
-    admission_fee,
+    admission_fee_amount: admission_fee,
     monthly_fee,
-    annual_fund,
+    transport_fee,
     address,
   } = req.body;
 
   // Format dates properly for MySQL
-  let formattedDateOfBirth = date_of_birth;
-  let formattedAdmissionDate = admission_date;
+  let formattedDateOfBirth = null;
+  let formattedAdmissionDate = null;
 
-  if (date_of_birth) {
+  if (date_of_birth && date_of_birth.trim() !== "") {
     // If it's already in YYYY-MM-DD format, use it as is
     if (date_of_birth.includes("T")) {
       formattedDateOfBirth = date_of_birth.split("T")[0];
+    } else {
+      formattedDateOfBirth = date_of_birth;
     }
   }
 
-  if (admission_date) {
+  if (admission_date && admission_date.trim() !== "") {
     // If it's already in YYYY-MM-DD format, use it as is
     if (admission_date.includes("T")) {
       formattedAdmissionDate = admission_date.split("T")[0];
+    } else {
+      formattedAdmissionDate = admission_date;
     }
   }
 
   const query = `
     UPDATE students SET
       name = ?, father_name = ?, cnic = ?, phone = ?, gender = ?, date_of_birth = ?,
-      admission_date = ?, class_id = ?, admission_fee = ?, monthly_fee = ?, annual_fund = ?, address = ?, updated_at = CURRENT_TIMESTAMP
+      admission_date = ?, class_id = ?, admission_fee_amount = ?, monthly_fee = ?, transport_fee = ?, address = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `;
 
@@ -314,7 +377,7 @@ exports.updateStudent = (req, res) => {
     class_id,
     admission_fee,
     monthly_fee,
-    annual_fund || 0,
+    transport_fee || 0,
     address,
     id,
   ];
@@ -324,6 +387,8 @@ exports.updateStudent = (req, res) => {
   db.query(query, values, (err, result) => {
     if (err) {
       console.error("Error updating student:", err);
+      console.error("SQL Query:", query);
+      console.error("SQL Values:", values);
       return res.status(500).json({ error: "Database error" });
     }
     if (result.affectedRows === 0) {
@@ -389,10 +454,16 @@ exports.searchStudents = (req, res) => {
     SELECT 
       s.*,
       c.name as class_name,
-      CONCAT(s.name) as full_name
+      CONCAT(s.name) as full_name,
+      COALESCE(s.admission_number, CONCAT('ADM-', YEAR(s.created_at), '-', s.id)) as admission_number
     FROM students s
     LEFT JOIN classes c ON s.class_id = c.id
-    WHERE s.name LIKE ? OR s.cnic LIKE ? OR s.phone LIKE ?
+    WHERE s.name LIKE ? 
+       OR s.cnic LIKE ? 
+       OR s.phone LIKE ? 
+       OR s.admission_number LIKE ?
+       OR CONCAT('ADM-', YEAR(s.created_at), '-', s.id) LIKE ?
+       OR c.name LIKE ?
     ORDER BY s.created_at DESC
   `;
 
@@ -400,12 +471,15 @@ exports.searchStudents = (req, res) => {
 
   db.query(
     searchQuery,
-    [searchTerm, searchTerm, searchTerm],
+    [searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm],
     (err, results) => {
       if (err) {
         console.error("Error searching students:", err);
         return res.status(500).json({ error: "Database error" });
       }
+      console.log(
+        `🔍 Search query: "${query}" returned ${results.length} results`
+      );
       res.json(results);
     }
   );
@@ -555,7 +629,7 @@ exports.markStudentsLeft = (req, res) => {
   console.log("=== MARK STUDENTS LEFT ===");
   console.log("Student IDs:", studentIds);
 
-  // Update students status to 'Left'
+  // Update students status to left
   const updateQuery = `
     UPDATE students 
     SET status = 'Left', updated_at = CURRENT_TIMESTAMP 
@@ -589,7 +663,7 @@ exports.reactivateStudent = (req, res) => {
   console.log("=== REACTIVATE STUDENT ===");
   console.log("Student ID:", id);
 
-  // Update student status to 'Active'
+  // Update student status to active
   const updateQuery =
     "UPDATE students SET status = 'Active', updated_at = CURRENT_TIMESTAMP WHERE id = ?";
 
@@ -702,4 +776,127 @@ exports.deleteStudent = (req, res) => {
       });
     });
   });
+};
+
+// Get fee status for students in a class
+exports.getClassStudentsFeeStatus = (req, res) => {
+  const { classId } = req.params;
+  const currentMonth = new Date().getMonth() + 1;
+  const currentYear = new Date().getFullYear();
+
+  const query = `
+    SELECT 
+      s.id,
+      s.name as student_name,
+      s.admission_number,
+      s.monthly_fee,
+      s.transport_fee,
+      c.name as class_name,
+      COALESCE(SUM(CASE WHEN f.month = ? AND f.year = ? AND f.fee_type = 'Monthly Fee' THEN f.amount ELSE 0 END), 0) as monthly_fee_paid,
+      COALESCE(SUM(CASE WHEN f.month = ? AND f.year = ? AND f.fee_type = 'Transport Fee' THEN f.amount ELSE 0 END), 0) as transport_fee_paid,
+      COALESCE(SUM(CASE WHEN f.fee_type = 'Admission Fee' THEN f.amount ELSE 0 END), 0) as admission_fee_paid,
+      COALESCE(SUM(CASE WHEN f.fee_type = 'Arrears' THEN f.amount ELSE 0 END), 0) as arrears_paid,
+      COALESCE(SUM(CASE WHEN f.fee_type = 'Fine' THEN f.amount ELSE 0 END), 0) as fine_paid,
+      COALESCE(SUM(CASE WHEN f.fee_type = 'Annual Fee' THEN f.amount ELSE 0 END), 0) as annual_fee_paid,
+      (s.monthly_fee + s.transport_fee) as total_expected_this_month,
+      (s.monthly_fee - COALESCE(SUM(CASE WHEN f.month = ? AND f.year = ? AND f.fee_type = 'Monthly Fee' THEN f.amount ELSE 0 END), 0)) as monthly_fee_pending,
+      (s.transport_fee - COALESCE(SUM(CASE WHEN f.month = ? AND f.year = ? AND f.fee_type = 'Transport Fee' THEN f.amount ELSE 0 END), 0)) as transport_fee_pending,
+      (5000 - COALESCE(SUM(CASE WHEN f.fee_type = 'Admission Fee' THEN f.amount ELSE 0 END), 0)) as admission_fee_pending,
+      COALESCE(SUM(CASE WHEN f.fee_type = 'Arrears' THEN f.amount ELSE 0 END), 0) as arrears_pending,
+      COALESCE(SUM(CASE WHEN f.fee_type = 'Fine' THEN f.amount ELSE 0 END), 0) as fine_pending,
+      COALESCE(SUM(CASE WHEN f.fee_type = 'Annual Fee' THEN f.amount ELSE 0 END), 0) as annual_fee_pending,
+      MAX(f.payment_date) as last_payment,
+      COUNT(CASE WHEN f.month = ? AND f.year = ? THEN 1 END) as payment_count_this_month
+    FROM students s
+    LEFT JOIN classes c ON s.class_id = c.id
+    LEFT JOIN fees f ON s.id = f.student_id
+    WHERE s.status = 'Active' AND s.class_id = ?
+    GROUP BY s.id, s.name, s.admission_number, s.monthly_fee, s.transport_fee, c.name
+    ORDER BY s.name
+  `;
+
+  db.query(
+    query,
+    [
+      currentMonth,
+      currentYear, // monthly_fee_paid
+      currentMonth,
+      currentYear, // transport_fee_paid
+      currentMonth,
+      currentYear, // monthly_fee_pending
+      currentMonth,
+      currentYear, // transport_fee_pending
+      currentMonth,
+      currentYear, // payment_count_this_month
+      classId,
+    ],
+    (err, results) => {
+      if (err) {
+        console.error("Error fetching class students fee status:", err);
+        return res.status(500).json({ error: "Database error" });
+      }
+
+      // Transform results to include comprehensive pending fees
+      const transformedResults = results.map((student) => {
+        const monthlyFeePending = Math.max(0, student.monthly_fee_pending);
+        const transportFeePending = Math.max(0, student.transport_fee_pending);
+        const admissionFeePending = Math.max(0, student.admission_fee_pending);
+        const arrearsPending = student.arrears_pending;
+        const finePending = student.fine_pending;
+        const annualFeePending = student.annual_fee_pending;
+
+        const totalPending =
+          monthlyFeePending +
+          transportFeePending +
+          admissionFeePending +
+          arrearsPending +
+          finePending +
+          annualFeePending;
+
+        // Determine fee status based on total pending
+        let feeStatus = "unpaid";
+        if (totalPending === 0) {
+          feeStatus = "paid";
+        } else if (
+          monthlyFeePending < student.monthly_fee ||
+          transportFeePending < student.transport_fee
+        ) {
+          feeStatus = "partial";
+        }
+
+        return {
+          ...student,
+          total_pending_this_month: totalPending,
+          fee_status: feeStatus,
+        };
+      });
+
+      // Calculate summary statistics
+      const totalStudents = transformedResults.length;
+      const paidStudents = transformedResults.filter(
+        (r) => r.fee_status === "paid"
+      ).length;
+      const partialStudents = transformedResults.filter(
+        (r) => r.fee_status === "partial"
+      ).length;
+      const unpaidStudents = transformedResults.filter(
+        (r) => r.fee_status === "unpaid"
+      ).length;
+      const totalPending = transformedResults.reduce(
+        (sum, r) => sum + parseFloat(r.total_pending_this_month || 0),
+        0
+      );
+
+      res.json({
+        students: transformedResults,
+        summary: {
+          total: totalStudents,
+          paid: paidStudents,
+          partial: partialStudents,
+          unpaid: unpaidStudents,
+          totalPending: totalPending,
+        },
+      });
+    }
+  );
 };

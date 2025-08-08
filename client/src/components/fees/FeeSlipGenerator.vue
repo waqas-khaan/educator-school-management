@@ -279,6 +279,7 @@
                 </template>
                 <span>Print Fee Slip</span>
               </v-tooltip>
+
               <v-tooltip bottom>
                 <template v-slot:activator="{ on, attrs }">
                   <v-btn
@@ -530,8 +531,11 @@ export default {
         this.loadFeeSlips();
       } catch (error) {
         console.error("Error generating fee slips:", error);
+        console.error("Error details:", error.response?.data);
         this.$toast.error(
-          error.response?.data?.error || "Failed to generate fee slips"
+          error.response?.data?.error ||
+            error.message ||
+            "Failed to generate fee slips"
         );
       } finally {
         this.bulkGenerating = false;
@@ -558,8 +562,11 @@ export default {
         this.selectedStudent = null;
       } catch (error) {
         console.error("Error generating fee slip:", error);
+        console.error("Error details:", error.response?.data);
         this.$toast.error(
-          error.response?.data?.error || "Failed to generate fee slip"
+          error.response?.data?.error ||
+            error.message ||
+            "Failed to generate fee slip"
         );
       } finally {
         this.individualGenerating = false;
@@ -679,8 +686,11 @@ export default {
     },
 
     getStudentAvatar(student) {
-      if (student.profile_image) {
-        return `${process.env.VUE_APP_API_URL}/uploads/profile-images/${student.profile_image}`;
+      if (!student) {
+        return `https://ui-avatars.com/api/?name=Unknown&background=1976d2&color=fff&size=200`;
+      }
+      if (student.profile_image && student.profile_image.trim() !== "") {
+        return `http://localhost:8081/uploads/profile-images/${student.profile_image}`;
       }
       return `https://ui-avatars.com/api/?name=${encodeURIComponent(
         student.name || "Unknown"
